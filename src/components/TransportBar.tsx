@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 
 interface Props {
@@ -20,54 +22,33 @@ export default function TransportBar({ isPlaying, currentTime, duration, onPlayP
   const [exporting, setExporting] = useState(false);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 20,
-        padding: "14px 18px",
-        background: "var(--bg-panel-raised)",
-        border: "1px solid var(--border-hairline)",
-        borderRadius: 12,
-        marginBottom: 16,
-      }}
-    >
+    <div className="card" style={{ display: "flex", alignItems: "center", gap: 20, padding: "12px 16px" }}>
       <button
         onClick={onPlayPause}
         aria-label={isPlaying ? "Pause" : "Play"}
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: "50%",
-          border: "none",
-          background: "var(--signal)",
-          color: "#00251c",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
+        className="btn btn-primary"
+        style={{ width: 36, height: 36, borderRadius: "50%", padding: 0 }}
       >
         {isPlaying ? (
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor">
             <rect x="1" y="0" width="4" height="14" rx="1" />
             <rect x="9" y="0" width="4" height="14" rx="1" />
           </svg>
         ) : (
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor">
             <path d="M1 0.5 L13 7 L1 13.5 Z" />
           </svg>
         )}
       </button>
 
-      <div className="mono" style={{ fontSize: 13, color: "var(--text-primary)", minWidth: 92 }}>
-        {formatTime(currentTime)} <span style={{ color: "var(--text-muted)" }}>/ {formatTime(duration)}</span>
+      <div className="mono" style={{ fontSize: 13, color: "var(--fg-default)", minWidth: 92 }}>
+        {formatTime(currentTime)} <span style={{ color: "var(--fg-muted)" }}>/ {formatTime(duration)}</span>
       </div>
 
       <div style={{ flex: 1 }} />
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Master</span>
+        <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>Master</span>
         <input
           type="range"
           min={0}
@@ -75,11 +56,12 @@ export default function TransportBar({ isPlaying, currentTime, duration, onPlayP
           step={0.01}
           defaultValue={1}
           onChange={(e) => onMasterVolume(parseFloat(e.target.value))}
-          style={{ width: 100, accentColor: "var(--signal)" }}
+          style={{ width: 100, accentColor: "var(--accent-emphasis)" }}
         />
       </div>
 
       <button
+        className="btn"
         disabled={exporting}
         onClick={async () => {
           setExporting(true);
@@ -88,16 +70,6 @@ export default function TransportBar({ isPlaying, currentTime, duration, onPlayP
           } finally {
             setExporting(false);
           }
-        }}
-        style={{
-          padding: "9px 14px",
-          fontSize: 12,
-          fontWeight: 600,
-          borderRadius: 8,
-          border: "1px solid var(--border-hairline)",
-          background: "transparent",
-          color: "var(--text-primary)",
-          opacity: exporting ? 0.6 : 1,
         }}
       >
         {exporting ? "Merender…" : "Export mix (.wav)"}

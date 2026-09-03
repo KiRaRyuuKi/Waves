@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import type { MultiStemPlayer } from "../lib/audioEngine";
 import type { Peaks } from "../lib/peaks";
@@ -12,9 +14,10 @@ interface Props {
   currentTime: number;
   engine: MultiStemPlayer;
   onSeek: (time: number) => void;
+  last: boolean;
 }
 
-export default function ChannelStrip({ name, label, color, peaks, duration, currentTime, engine, onSeek }: Props) {
+export default function ChannelStrip({ name, label, color, peaks, duration, currentTime, engine, onSeek, last }: Props) {
   const initial = engine.getChannelState(name) ?? { volume: 1, muted: false, solo: false };
   const [volume, setVolume] = useState(initial.volume);
   const [muted, setMuted] = useState(initial.muted);
@@ -40,39 +43,43 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "28px 1fr 140px",
+        gridTemplateColumns: "20px 1fr 150px",
         alignItems: "center",
         gap: 14,
         padding: "10px 16px",
-        borderBottom: "1px solid var(--border-hairline)",
+        borderBottom: last ? "none" : "1px solid var(--border-muted)",
+        background: "var(--canvas-default)",
       }}
     >
       <div
         title={label}
-        style={{
-          width: 10,
-          height: 10,
-          borderRadius: "50%",
-          background: color,
-          justifySelf: "center",
-        }}
+        style={{ width: 8, height: 8, borderRadius: "50%", background: color, justifySelf: "center" }}
       />
 
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>
+        <div
+          className="label"
+          style={{
+            background: `color-mix(in srgb, ${color} 14%, white)`,
+            color,
+            border: `1px solid color-mix(in srgb, ${color} 40%, white)`,
+            marginBottom: 6,
+            fontWeight: 600,
+          }}
+        >
           {label}
         </div>
-        <Waveform peaks={peaks} duration={duration} currentTime={currentTime} color={color} height={40} onSeek={onSeek} />
+        <Waveform peaks={peaks} duration={duration} currentTime={currentTime} color={color} height={36} onSeek={onSeek} />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div
           style={{
             width: 6,
-            height: 40,
+            height: 36,
             borderRadius: 3,
-            background: "var(--bg-panel-raised)",
-            border: "1px solid var(--border-hairline)",
+            background: "var(--canvas-inset)",
+            border: "1px solid var(--border-default)",
             position: "relative",
             overflow: "hidden",
             display: "flex",
@@ -106,8 +113,8 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
           style={{
             writingMode: "vertical-lr" as any,
             direction: "rtl" as any,
-            width: 20,
-            height: 56,
+            width: 18,
+            height: 50,
             accentColor: color,
           }}
         />
@@ -120,14 +127,14 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
             }}
             aria-pressed={muted}
             style={{
-              width: 26,
-              height: 22,
+              width: 24,
+              height: 20,
               fontSize: 10,
               fontWeight: 700,
-              borderRadius: 5,
-              border: "1px solid var(--border-hairline)",
-              background: muted ? "var(--peak)" : "var(--bg-panel-raised)",
-              color: muted ? "#1a0000" : "var(--text-muted)",
+              borderRadius: 4,
+              border: "1px solid var(--border-default)",
+              background: muted ? "var(--danger-subtle)" : "var(--canvas-default)",
+              color: muted ? "var(--danger-fg)" : "var(--fg-muted)",
             }}
           >
             M
@@ -139,14 +146,14 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
             }}
             aria-pressed={solo}
             style={{
-              width: 26,
-              height: 22,
+              width: 24,
+              height: 20,
               fontSize: 10,
               fontWeight: 700,
-              borderRadius: 5,
-              border: "1px solid var(--border-hairline)",
-              background: solo ? "var(--signal)" : "var(--bg-panel-raised)",
-              color: solo ? "#00281f" : "var(--text-muted)",
+              borderRadius: 4,
+              border: "1px solid var(--border-default)",
+              background: solo ? "var(--accent-subtle)" : "var(--canvas-default)",
+              color: solo ? "var(--accent-fg)" : "var(--fg-muted)",
             }}
           >
             S

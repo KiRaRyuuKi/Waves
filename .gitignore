@@ -1,9 +1,15 @@
 __pycache__/
 *.pyc
-app/storage/
+
+server/storage/
+
 venv/
 .venv/
 
 node_modules/
+.next/
 dist/
+
 .DS_Store
+
+.aider*

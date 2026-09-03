@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef } from "react";
 import type { Peaks } from "../lib/peaks";
 
@@ -43,12 +45,12 @@ export default function Waveform({ peaks, duration, currentTime, color, height =
       const playedFraction = Math.min(1, currentTime / duration);
       const overlayWidth = playedFraction * width;
 
-      // Dim the unplayed portion instead of drawing a bright line —
-      // reads as "progress" rather than a stray cursor.
-      ctx.fillStyle = "rgba(16, 19, 26, 0.55)";
+      // Fade the *unplayed* portion toward white — reads as "progress"
+      // against the light canvas instead of a stray cursor line.
+      ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
       ctx.fillRect(overlayWidth, 0, width - overlayWidth, height);
 
-      ctx.fillStyle = "rgba(237, 234, 226, 0.9)";
+      ctx.fillStyle = "rgba(9, 105, 218, 0.9)";
       ctx.fillRect(overlayWidth - 1, 0, 1.5, height);
     }
   }, [peaks, duration, currentTime, color, height]);

@@ -1,14 +1,16 @@
+"use client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
-import Header from "./components/Header";
-import UploadZone from "./components/UploadZone";
-import ProgressOverlay from "./components/ProgressOverlay";
-import Mixer from "./components/Mixer";
-import TransportBar from "./components/TransportBar";
-import Waveform from "./components/Waveform";
-import { fetchJob, originalUrl, stemUrl, uploadTrack } from "./lib/api";
-import { MultiStemPlayer } from "./lib/audioEngine";
-import { computePeaks, type Peaks } from "./lib/peaks";
-import { STEM_COLORS, STEM_LABELS, type JobState, type ModelId } from "./lib/types";
+import Toolbar from "./Toolbar";
+import UploadZone from "./UploadZone";
+import ProgressOverlay from "./ProgressOverlay";
+import Mixer from "./Mixer";
+import TransportBar from "./TransportBar";
+import Waveform from "./Waveform";
+import { fetchJob, originalUrl, stemUrl, uploadTrack } from "../lib/api";
+import { MultiStemPlayer } from "../lib/audioEngine";
+import { computePeaks, type Peaks } from "../lib/peaks";
+import { STEM_COLORS, STEM_LABELS, type JobState, type ModelId } from "../lib/types";
 
 type Phase = "idle" | "uploading" | "processing" | "ready" | "error";
 
@@ -28,6 +30,7 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   const engineRef = useRef<MultiStemPlayer | null>(null);
   const rafRef = useRef<number>();
@@ -37,7 +40,6 @@ export default function App() {
     return engineRef.current;
   }, []);
 
-  // Poll job status while a separation is running.
   useEffect(() => {
     if (phase !== "processing" || !job) return;
     const interval = setInterval(async () => {
@@ -66,7 +68,6 @@ export default function App() {
     async (finishedJob: JobState) => {
       const engine = getEngine();
       const stemInputs = finishedJob.stems.map((name) => ({ name, url: stemUrl(finishedJob.id, name) }));
-
       await engine.loadStems(stemInputs);
 
       const stems: LoadedStem[] = finishedJob.stems.map((name) => {
@@ -74,13 +75,11 @@ export default function App() {
         return {
           name,
           label: STEM_LABELS[name] ?? name,
-          color: STEM_COLORS[name] ?? "var(--signal)",
+          color: STEM_COLORS[name] ?? "var(--accent-fg)",
           peaks: computePeaks(buffer, 400),
         };
       });
 
-      // Master waveform: decode the original upload separately so it
-      // reads as the "full picture" above the per-stem strips.
       try {
         const res = await fetch(originalUrl(finishedJob.id));
         const arrayBuffer = await res.arrayBuffer();
@@ -102,6 +101,7 @@ export default function App() {
   const handleUpload = useCallback(async (file: File, model: ModelId) => {
     setPhase("uploading");
     setErrorMessage(null);
+    setFileName(file.name);
     try {
       const { job_id } = await uploadTrack(file, model);
       setJob({ id: job_id, status: "queued", progress: 0, stage: "Mengunggah…", stems: [], error: null, model });
@@ -152,9 +152,9 @@ export default function App() {
     setDuration(0);
     setCurrentTime(0);
     setIsPlaying(false);
+    setFileName(null);
   }, []);
 
-  // Drive the playhead while playing.
   useEffect(() => {
     if (!isPlaying) return;
     const tick = () => {
@@ -169,37 +169,36 @@ export default function App() {
   }, [isPlaying]);
 
   return (
-    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
-      <Header showReset={phase === "ready"} onReset={handleReset} />
+    <main style={{ maxWidth: 1012, margin: "0 auto", padding: "24px 16px 64px" }}>
+      <Toolbar fileName={fileName} showReset={phase === "ready"} onReset={handleReset} />
 
-      <div style={{ flex: 1, padding: "24px", maxWidth: 960, width: "100%", margin: "0 auto" }}>
-        {phase === "idle" && <UploadZone onSubmit={handleUpload} disabled={false} />}
+      {phase === "idle" && <UploadZone onSubmit={handleUpload} disabled={false} />}
 
-        {phase === "uploading" && <ProgressOverlay stage="Mengunggah file…" progress={5} />}
+      {phase === "uploading" && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <ProgressOverlay stage="Mengunggah file…" progress={5} />
+        </div>
+      )}
 
-        {phase === "processing" && job && <ProgressOverlay stage={job.stage} progress={job.progress} />}
+      {phase === "processing" && job && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <ProgressOverlay stage={job.stage} progress={job.progress} />
+        </div>
+      )}
 
-        {phase === "error" && (
-          <div style={{ maxWidth: 480, margin: "64px auto", textAlign: "center" }}>
-            <div style={{ color: "var(--peak)", fontWeight: 600, marginBottom: 8 }}>Terjadi kesalahan</div>
-            <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 20 }}>{errorMessage}</div>
-            <button
-              onClick={handleReset}
-              style={{
-                padding: "10px 18px",
-                borderRadius: 8,
-                border: "1px solid var(--border-hairline)",
-                background: "var(--bg-panel)",
-                color: "var(--text-primary)",
-              }}
-            >
-              Coba lagi
-            </button>
-          </div>
-        )}
+      {phase === "error" && (
+        <div className="card" style={{ marginTop: 16, padding: "32px 24px", textAlign: "center" }}>
+          <div style={{ color: "var(--danger-fg)", fontWeight: 600, marginBottom: 8 }}>Terjadi kesalahan</div>
+          <div style={{ color: "var(--fg-muted)", fontSize: 13, marginBottom: 20 }}>{errorMessage}</div>
+          <button className="btn" onClick={handleReset}>
+            Coba lagi
+          </button>
+        </div>
+      )}
 
-        {phase === "ready" && (
-          <>
+      {phase === "ready" && (
+        <>
+          <div style={{ marginTop: 16 }}>
             <TransportBar
               isPlaying={isPlaying}
               currentTime={currentTime}
@@ -208,29 +207,25 @@ export default function App() {
               onMasterVolume={(v) => getEngine().setMasterVolume(v)}
               onExport={handleExport}
             />
+          </div>
 
-            {masterPeaks && (
-              <div
-                style={{
-                  background: "var(--bg-panel)",
-                  border: "1px solid var(--border-hairline)",
-                  borderRadius: 12,
-                  padding: "14px 16px",
-                  marginBottom: 16,
-                }}
-              >
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>Track asli</div>
+          {masterPeaks && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-header">Track asli</div>
+              <div style={{ padding: "12px 16px" }}>
                 <Waveform
                   peaks={masterPeaks}
                   duration={duration}
                   currentTime={currentTime}
-                  color="var(--text-muted)"
+                  color="var(--fg-muted)"
                   height={56}
                   onSeek={handleSeek}
                 />
               </div>
-            )}
+            </div>
+          )}
 
+          <div style={{ marginTop: 16 }}>
             <Mixer
               stems={loadedStems}
               duration={duration}
@@ -238,9 +233,9 @@ export default function App() {
               engine={getEngine()}
               onSeek={handleSeek}
             />
-          </>
-        )}
-      </div>
-    </div>
+          </div>
+        </>
+      )}
+    </main>
   );
 }

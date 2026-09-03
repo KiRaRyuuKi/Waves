@@ -19,15 +19,12 @@ interface Props {
 
 export default function Mixer({ stems, duration, currentTime, engine, onSeek }: Props) {
   return (
-    <div
-      style={{
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border-hairline)",
-        borderRadius: 12,
-        overflow: "hidden",
-      }}
-    >
-      {stems.map((stem) => (
+    <div className="card">
+      <div className="card-header" style={{ display: "flex", justifyContent: "space-between" }}>
+        <span>Stems</span>
+        <span>{stems.length} track{stems.length === 1 ? "" : "s"}</span>
+      </div>
+      {stems.map((stem, i) => (
         <ChannelStrip
           key={stem.name}
           name={stem.name}
@@ -38,6 +35,7 @@ export default function Mixer({ stems, duration, currentTime, engine, onSeek }: 
           currentTime={currentTime}
           engine={engine}
           onSeek={onSeek}
+          last={i === stems.length - 1}
         />
       ))}
     </div>
