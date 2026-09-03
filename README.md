@@ -1,9 +1,7 @@
 # Waves
 
 Tool pemisahan instrumen musik berbasis [Demucs](https://github.com/facebookresearch/demucs),
-dengan backend FastAPI (Python) dan UI mixer profesional berbasis **Next.js + TypeScript**,
-bergaya visual mengikuti GitHub (Primer design tokens: header gelap, kartu putih dengan
-border tipis, tombol hijau khas GitHub, dsb).
+dengan backend FastAPI (Python) berbasis **Next.js + TypeScript**.
 
 Upload sebuah lagu → Demucs memisahkannya jadi 4 stem (**vocals, drums, bass, other**) →
 UI menampilkan mixer console lengkap: waveform per-stem, fader volume, mute/solo,
@@ -12,13 +10,8 @@ langsung di browser tanpa upload ulang ke server.
 
 ## Struktur project
 
-Backend (Python) dan frontend (Next.js) sengaja digabung di satu root folder
-yang sama — bukan dua folder `backend/`+`frontend/` terpisah. Penting:
-folder backend Python **bernama `server/`, bukan `app/`**, supaya tidak
-bentrok dengan konvensi routing Next.js yang juga memakai nama folder `app/`
-(lewat `src/app/`). Kalau kamu ganti nama folder `server/` kembali menjadi
-`app/` di root, Next.js akan salah baca folder itu sebagai app-directory-nya
-sendiri dan semua halaman jadi 404.
+Backend (Python) dan frontend (Next.js) digabung di satu root folder
+yang sama dengan folder backend Python **bernama `server/`**.
 
 ```
 Waves/
@@ -29,7 +22,7 @@ Waves/
 ├── vendor/demucs/          # source code Demucs, di-vendor langsung (lihat catatan offline)
 ├── requirements.txt
 │
-├── src/                     # frontend Next.js (App Router) + TypeScript
+├── src/                    # frontend Next.js (App Router) + TypeScript
 │   ├── app/
 │   │   ├── layout.tsx      # header gelap ala GitHub (breadcrumb repo)
 │   │   ├── page.tsx
@@ -78,7 +71,7 @@ kedua server harus jalan bersamaan.
 
 ## Catatan penting untuk "offline mode"
 
-Ada dua hal yang terpisah di sini, karena keduanya sering tertukar:
+Ada dua hal yang terpisah, karena keduanya sering tertukar:
 
 1. **Kode Demucs sendiri** — sudah sepenuhnya di-vendor ke dalam
    `vendor/demucs`. `pip install` tidak perlu internet untuk mengambil kode
