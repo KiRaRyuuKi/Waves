@@ -5,7 +5,7 @@ dengan backend FastAPI (Python) berbasis **Next.js + TypeScript**.
 
 Upload sebuah lagu → Demucs memisahkannya jadi 4 stem (**vocals, drums, bass, other**) →
 UI menampilkan mixer console lengkap: waveform per-stem, fader volume, mute/solo,
-level meter real-time, dan tombol **export mix kustom ke .wav** — semua diproses
+level meter real-time, dan tombol **export mix kustom ke .wav** semua diproses
 langsung di browser tanpa upload ulang ke server.
 
 ## Struktur project
@@ -113,10 +113,6 @@ Ada dua hal yang terpisah, karena keduanya sering tertukar:
 
 ## Troubleshooting
 
-- **Halaman selalu 404** — biasanya karena ada folder bernama `app/` lain di
-  root project (misalnya backend Python yang tidak sengaja dinamai `app/`
-  lagi). Next.js akan salah pakai folder itu sebagai app-directory. Pastikan
-  backend tetap bernama `server/`, bukan `app/`.
 - **`ModuleNotFoundError: torchcodec` / `Could not load libtorchcodec`** — versi
   `torchaudio` terbaru mewajibkan package `torchcodec` (plus FFmpeg versi yang
   persis cocok) hanya untuk menyimpan file audio. Ini rapuh di banyak setup
