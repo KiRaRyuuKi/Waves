@@ -8,6 +8,18 @@ export interface JobState {
   stems: string[];
   error: string | null;
   model: string;
+  filename?: string | null;
+}
+
+export interface RecentJob {
+  id: string;
+  filename: string;
+  model: string;
+  status: JobStatus;
+  stage: string;
+  stems: string[];
+  error: string | null;
+  created_at: number;
 }
 
 export type ModelId = "htdemucs" | "htdemucs_ft" | "mdx_extra";

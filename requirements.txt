@@ -1,7 +1,24 @@
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
-# Installed from the vendored copy in backend/vendor/demucs (see below)
-# instead of `git+https://...` so `pip install -r requirements.txt`
-# never needs to reach GitHub.
+
+# --- Stem separation (Demucs) ---
+# Installed from the vendored copy in vendor/demucs (see README) instead
+# of `git+https://...` so `pip install -r requirements.txt` never needs
+# to reach GitHub.
 -e ./vendor/demucs
+
+# --- Voice synthesis (VITS, vendored in vendor/vits) ---
+numba>=0.57
+librosa>=0.10
+Unidecode>=1.3
+jamo>=0.4
+pypinyin>=0.49
+jieba>=0.42
+cn2an>=0.5
+
+# Japanese text -> phoneme. Vanilla pyopenjtalk compiles from source and
+# can be painful on Windows (needs a C/C++ toolchain). If `pip install`
+# fails on this line, replace it with `pyopenjtalk-prebuilt` instead —
+# same import name, no compiler required. See README troubleshooting.
+pyopenjtalk>=0.3

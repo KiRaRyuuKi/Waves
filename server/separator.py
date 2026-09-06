@@ -19,11 +19,12 @@ from .jobs import JobStatus, store
 
 PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)%\|")
 
-# htdemucs_ft bags 4 sub-model passes; everything else is a single pass.
+# htdemucs_ft banks 4 sub-model passes; mdx_extra is a bag of 4 too;
+# everything else is a single pass.
 MODEL_PASSES = {
     "htdemucs": 1,
     "htdemucs_ft": 4,
-    "mdx_extra": 1,
+    "mdx_extra": 4,
 }
 
 STORAGE_ROOT = Path(__file__).parent / "storage"
@@ -156,5 +157,5 @@ def run_separation(job_id: str, input_path: Path, model: str) -> None:
     store.update(job_id, status=JobStatus.DONE, progress=100, stage="Done", stems=stems)
 
 
-def stem_file_path(job_id: str, model: str, input_stem_name: str, stem: str) -> Path:
-    return OUTPUT_ROOT / model / input_stem_name / f"{stem}.wav"
+def stem_file_path(job_id: str, model: str, stem: str) -> Path:
+    return OUTPUT_ROOT / model / job_id / f"{stem}.wav"

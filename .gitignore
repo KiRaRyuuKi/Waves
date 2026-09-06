@@ -1,7 +1,10 @@
 __pycache__/
 *.pyc
 
-server/storage/
+server/storage/models/*.pth
+server/storage/separated/*
+server/storage/training/*
+server/storage/uploads/*
 
 venv/
 .venv/
@@ -12,4 +15,6 @@ dist/
 
 .DS_Store
 
-.aider*
+*.pth
+
+opencode.json

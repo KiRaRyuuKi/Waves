@@ -58,7 +58,8 @@ export default function Waveform({ peaks, duration, currentTime, color, height =
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: "100%", height, display: "block", cursor: onSeek ? "pointer" : "default" }}
+      className={`block w-full ${onSeek ? "cursor-pointer" : "cursor-default"}`}
+      style={{ height }}
       onClick={(e) => {
         if (!onSeek) return;
         const rect = e.currentTarget.getBoundingClientRect();

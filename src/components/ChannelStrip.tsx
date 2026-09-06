@@ -23,7 +23,7 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
   const [muted, setMuted] = useState(initial.muted);
   const [solo, setSolo] = useState(initial.solo);
   const meterRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const tick = () => {
@@ -41,30 +41,23 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
 
   return (
     <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "20px 1fr 150px",
-        alignItems: "center",
-        gap: 14,
-        padding: "10px 16px",
-        borderBottom: last ? "none" : "1px solid var(--border-muted)",
-        background: "var(--canvas-default)",
-      }}
+      className={`grid grid-cols-[10px_1fr_90px] items-center gap-3.5 bg-white px-4 py-2.5 ${
+        last ? "" : "border-b border-edge-soft"
+      }`}
     >
       <div
         title={label}
-        style={{ width: 8, height: 8, borderRadius: "50%", background: color, justifySelf: "center" }}
+        className="h-2 w-2 justify-self-center rounded-full"
+        style={{ background: color }}
       />
 
-      <div style={{ minWidth: 0 }}>
+      <div className="min-w-0">
         <div
-          className="label"
+          className="label mb-1.5 font-semibold"
           style={{
             background: `color-mix(in srgb, ${color} 14%, white)`,
             color,
             border: `1px solid color-mix(in srgb, ${color} 40%, white)`,
-            marginBottom: 6,
-            fontWeight: 600,
           }}
         >
           {label}
@@ -72,25 +65,12 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
         <Waveform peaks={peaks} duration={duration} currentTime={currentTime} color={color} height={36} onSeek={onSeek} />
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div
-          style={{
-            width: 6,
-            height: 36,
-            borderRadius: 3,
-            background: "var(--canvas-inset)",
-            border: "1px solid var(--border-default)",
-            position: "relative",
-            overflow: "hidden",
-            display: "flex",
-            alignItems: "flex-end",
-          }}
-        >
+      <div className="flex items-center gap-2.5">
+        <div className="relative flex h-9 w-1.5 items-end overflow-hidden rounded-[3px] border border-edge bg-canvas-inset">
           <div
             ref={meterRef}
+            className="h-full w-full"
             style={{
-              width: "100%",
-              height: "100%",
               background: color,
               transform: "scaleY(0)",
               transformOrigin: "bottom",
@@ -119,23 +99,18 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
           }}
         />
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="flex flex-col gap-1">
           <button
             onClick={() => {
               engine.toggleMute(name);
               setMuted(!muted);
             }}
             aria-pressed={muted}
-            style={{
-              width: 24,
-              height: 20,
-              fontSize: 10,
-              fontWeight: 700,
-              borderRadius: 4,
-              border: "1px solid var(--border-default)",
-              background: muted ? "var(--danger-subtle)" : "var(--canvas-default)",
-              color: muted ? "var(--danger-fg)" : "var(--fg-muted)",
-            }}
+            className={`h-5 w-6 rounded border text-[10px] font-bold ${
+              muted
+                ? "border-edge bg-red-100 text-red-600"
+                : "border-edge bg-white text-ink-muted"
+            }`}
           >
             M
           </button>
@@ -145,16 +120,11 @@ export default function ChannelStrip({ name, label, color, peaks, duration, curr
               setSolo(!solo);
             }}
             aria-pressed={solo}
-            style={{
-              width: 24,
-              height: 20,
-              fontSize: 10,
-              fontWeight: 700,
-              borderRadius: 4,
-              border: "1px solid var(--border-default)",
-              background: solo ? "var(--accent-subtle)" : "var(--canvas-default)",
-              color: solo ? "var(--accent-fg)" : "var(--fg-muted)",
-            }}
+            className={`h-5 w-6 rounded border text-[10px] font-bold ${
+              solo
+                ? "border-edge bg-canvas-inset text-ink-muted"
+                : "border-edge bg-white text-ink-muted"
+            }`}
           >
             S
           </button>

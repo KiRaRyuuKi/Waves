@@ -1,0 +1,13 @@
+{
+  "kafka": {
+    "enable": true,
+    "name_en": "kafka",
+    "name_zh": "卡芙卡",
+    "title": "Honkai: Star Rail-カフカ",
+    "cover": "cover.png",
+    "sid": 10,
+    "example": "すずめの戸締り、みんなは何回みた〜？",
+    "language": "Japanese",
+    "type": "multi"
+  }
+}

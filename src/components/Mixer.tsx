@@ -20,7 +20,7 @@ interface Props {
 export default function Mixer({ stems, duration, currentTime, engine, onSeek }: Props) {
   return (
     <div className="card">
-      <div className="card-header" style={{ display: "flex", justifyContent: "space-between" }}>
+      <div className="card-header flex items-center justify-between">
         <span>Stems</span>
         <span>{stems.length} track{stems.length === 1 ? "" : "s"}</span>
       </div>

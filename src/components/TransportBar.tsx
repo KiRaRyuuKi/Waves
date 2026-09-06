@@ -22,12 +22,11 @@ export default function TransportBar({ isPlaying, currentTime, duration, onPlayP
   const [exporting, setExporting] = useState(false);
 
   return (
-    <div className="card" style={{ display: "flex", alignItems: "center", gap: 20, padding: "12px 16px" }}>
+    <div className="card flex items-center gap-5 px-4 py-3">
       <button
         onClick={onPlayPause}
         aria-label={isPlaying ? "Pause" : "Play"}
-        className="btn btn-primary"
-        style={{ width: 36, height: 36, borderRadius: "50%", padding: 0 }}
+        className="btn btn-primary h-9 w-9 rounded-full p-0"
       >
         {isPlaying ? (
           <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor">
@@ -41,14 +40,14 @@ export default function TransportBar({ isPlaying, currentTime, duration, onPlayP
         )}
       </button>
 
-      <div className="mono" style={{ fontSize: 13, color: "var(--fg-default)", minWidth: 92 }}>
-        {formatTime(currentTime)} <span style={{ color: "var(--fg-muted)" }}>/ {formatTime(duration)}</span>
+      <div className="mono min-w-[92px] text-[13px] text-ink">
+        {formatTime(currentTime)} <span className="text-ink-muted">/ {formatTime(duration)}</span>
       </div>
 
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>Master</span>
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-ink-muted">Master</span>
         <input
           type="range"
           min={0}

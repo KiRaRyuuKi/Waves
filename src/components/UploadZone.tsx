@@ -22,8 +22,8 @@ export default function UploadZone({ onSubmit, disabled }: Props) {
   );
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
-      <div style={{ padding: 24 }}>
+    <div className="card mt-4">
+      <div className="p-6">
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -36,34 +36,24 @@ export default function UploadZone({ onSubmit, disabled }: Props) {
             if (!disabled) handleFiles(e.dataTransfer.files);
           }}
           onClick={() => !disabled && inputRef.current?.click()}
-          style={{
-            border: `2px dashed ${dragging ? "var(--accent-emphasis)" : "var(--border-default)"}`,
-            borderRadius: "var(--radius)",
-            padding: "48px 24px",
-            textAlign: "center",
-            cursor: disabled ? "default" : "pointer",
-            background: dragging ? "var(--accent-subtle)" : "var(--canvas-subtle)",
-            opacity: disabled ? 0.6 : 1,
-          }}
+          className={`rounded-md border-2 border-dashed p-12 text-center ${
+            disabled ? "cursor-default opacity-60" : "cursor-pointer"
+          } ${dragging ? "border-ink bg-canvas-inset" : "border-edge bg-canvas-subtle"}`}
         >
-          <svg width="32" height="32" viewBox="0 0 16 16" fill="var(--fg-subtle)" style={{ marginBottom: 8 }}>
+          <svg width="32" height="32" viewBox="0 0 16 16" fill="var(--fg-subtle)" className="mb-2 mx-auto">
             <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z" />
             <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.97a.75.75 0 1 1 1.06 1.061l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 6.78a.75.75 0 1 1 1.06-1.06Z" />
           </svg>
-          <div style={{ fontSize: 15, color: "var(--fg-default)", fontWeight: 600 }}>
-            Jatuhkan file audio di sini
-          </div>
-          <div style={{ fontSize: 13, color: "var(--fg-muted)", marginTop: 4 }}>
-            atau <span style={{ color: "var(--accent-fg)" }}>klik untuk memilih file</span> — MP3, WAV, FLAC, M4A
+          <div className="text-[15px] font-semibold text-ink">Jatuhkan file audio di sini</div>
+          <div className="mt-1 text-[13px] text-ink-muted">
+            atau <span className="text-ink">klik untuk memilih file</span> — MP3, WAV, FLAC, M4A
           </div>
           <input ref={inputRef} type="file" accept="audio/*" hidden onChange={(e) => handleFiles(e.target.files)} />
         </div>
 
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-muted)", marginBottom: 8 }}>
-            Model pemisahan
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+        <div className="mt-5">
+          <div className="mb-2 text-xs font-semibold text-ink-muted">Model pemisahan</div>
+          <div className="grid grid-cols-3 gap-2">
             {MODEL_OPTIONS.map((opt) => (
               <button
                 key={opt.id}
@@ -72,19 +62,15 @@ export default function UploadZone({ onSubmit, disabled }: Props) {
                   e.stopPropagation();
                   setModel(opt.id);
                 }}
-                style={{
-                  textAlign: "left",
-                  padding: "10px 12px",
-                  borderRadius: "var(--radius)",
-                  border: `1px solid ${model === opt.id ? "var(--accent-emphasis)" : "var(--border-default)"}`,
-                  background: model === opt.id ? "var(--accent-subtle)" : "var(--canvas-default)",
-                  color: "var(--fg-default)",
-                }}
+                className={`rounded-md border px-3 py-2.5 text-left transition-colors ${
+                  model === opt.id
+                    ? "border-ink bg-canvas-inset"
+                    : "border-edge bg-white hover:bg-canvas-subtle"
+                }`}
+                style={{ color: "var(--fg-default)" }}
               >
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
-                <div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 3, lineHeight: 1.4 }}>
-                  {opt.description}
-                </div>
+                <div className="text-[13px] font-semibold">{opt.label}</div>
+                <div className="mt-[3px] text-[11px] leading-[1.4] text-ink-muted">{opt.description}</div>
               </button>
             ))}
           </div>

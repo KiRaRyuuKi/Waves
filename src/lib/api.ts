@@ -1,4 +1,4 @@
-import type { JobState, ModelId } from "./types";
+import type { JobState, ModelId, RecentJob } from "./types";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -18,6 +18,24 @@ export async function uploadTrack(file: File, model: ModelId): Promise<{ job_id:
 
 export async function fetchJob(jobId: string): Promise<JobState> {
   const res = await fetch(`/api/jobs/${jobId}`);
+  return json(res);
+}
+
+export async function retryJob(jobId: string): Promise<{ job_id: string }> {
+  const res = await fetch(`/api/jobs/${jobId}/retry`, { method: "POST" });
+  return json(res);
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+}
+
+export async function listRecentJobs(): Promise<RecentJob[]> {
+  const res = await fetch("/api/jobs?limit=20");
   return json(res);
 }
 
