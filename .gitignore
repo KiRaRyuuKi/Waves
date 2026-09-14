@@ -6,6 +6,11 @@ server/storage/separated/*
 server/storage/training/*
 server/storage/uploads/*
 
+# Stable Diffusion weights (multi-GB) — jangan di-commit
+server/storage/diffusers/*/
+server/storage/diffusers/*.safetensors
+server/storage/diffusers/*.ckpt
+
 venv/
 .venv/
 
@@ -17,4 +22,5 @@ dist/
 
 *.pth
 
-opencode.json
+# Runtime logs
+*.log

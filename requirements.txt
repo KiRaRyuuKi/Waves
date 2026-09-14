@@ -3,10 +3,10 @@ uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
 
 # --- Stem separation (Demucs) ---
-# Installed from the vendored copy in vendor/demucs (see README) instead
+# Installed from the vendored copy in vendor/stem (see README) instead
 # of `git+https://...` so `pip install -r requirements.txt` never needs
 # to reach GitHub.
--e ./vendor/demucs
+-e ./vendor/stem
 
 # --- Voice synthesis (VITS, vendored in vendor/vits) ---
 numba>=0.57
@@ -22,3 +22,11 @@ cn2an>=0.5
 # fails on this line, replace it with `pyopenjtalk-prebuilt` instead —
 # same import name, no compiler required. See README troubleshooting.
 pyopenjtalk>=0.3
+
+# --- Image generation (Stable Diffusion) ---
+# Pipa diffusers dipakai lewat server/diffusers.py. Bobot model TIDAK diunduh
+# otomatis — taruh manual di server/storage/diffusers/<id>/ (lihat README
+# di folder itu). Kompatibel dengan torch 2.x yang sudah dipakai Demucs/VITS.
+diffusers>=0.30
+safetensors>=0.4
+accelerate>=0.30

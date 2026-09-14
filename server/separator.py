@@ -59,7 +59,7 @@ def _iter_lines(stream) -> "tp.Iterator[str]":
         yield buffer
 
 
-def run_separation(job_id: str, input_path: Path, model: str) -> None:
+def run_separation(job_id: str, input_path: Path, model: str, device: str = "cpu") -> None:
     store.update(job_id, status=JobStatus.PROCESSING, stage="Loading model", progress=1)
 
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
@@ -73,6 +73,8 @@ def run_separation(job_id: str, input_path: Path, model: str) -> None:
         model,
         "-o",
         str(OUTPUT_ROOT),
+        "--device",
+        device,
         str(input_path),
     ]
 

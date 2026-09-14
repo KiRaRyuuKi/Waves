@@ -79,12 +79,25 @@ export async function deleteTrainingDataset(datasetId: string): Promise<void> {
   await jsonOrThrow(res);
 }
 
+export interface BaseModel {
+  id: string;
+  name: string;
+  language: string;
+}
+
+export async function fetchBaseModels(): Promise<BaseModel[]> {
+  const data = await jsonOrThrow(await fetch("/api/training/base_models"));
+  return data.models;
+}
+
 export interface StartTrainingParams {
   datasetId: string;
+  baseModel: string;
   name: string;
   steps: number;
   learningRate: number;
   sampleText: string;
+  device?: string;
 }
 
 export async function startTraining(
@@ -95,11 +108,12 @@ export async function startTraining(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       dataset_id: params.datasetId,
+      base_model: params.baseModel,
       name: params.name,
       steps: params.steps,
       learning_rate: params.learningRate,
       sample_text: params.sampleText,
-      base_model: "kafka",
+      device: params.device ?? "auto",
     }),
   });
   return jsonOrThrow(res);

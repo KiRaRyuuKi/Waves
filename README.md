@@ -21,7 +21,7 @@ Sintesis suara karakter berbasis VITS dengan pemilihan game & karakter, konfigur
 ![Voice Synthesis](docs/screenshots/voice-synthesis.png)
 
 ### Fine-tune VITS (ID)
-Halaman untuk melatih ulang model kafka agar bisa berbicara bahasa Indonesia, lengkap dengan manajemen dataset dan status pelatihan.
+Halaman untuk melatih ulang model agar bisa berbicara bahasa Indonesia, lengkap dengan manajemen dataset dan status pelatihan.
 
 ![Fine-tune](docs/screenshots/fine-tune.png)
 
@@ -32,7 +32,8 @@ Halaman untuk melatih ulang model kafka agar bisa berbicara bahasa Indonesia, le
 - **Mixer Studio Real-time**: Fader volume, mute/solo, level meter per-track, dan waveform klik-untuk-seek (Web Audio API)
 - **Export Mix Kustom**: Merender kombinasi fader/mute/solo menjadi file .wav langsung di browser (OfflineAudioContext)
 - **Voice Synthesis**: Suara karakter berbasis VITS yang berjalan lokal, dengan banyak karakter & speaker
-- **Fine-tune VITS**: Latih model kafka supaya bicara bahasa Indonesia dari dataset audio + transkrip sendiri
+- **Fine-tune VITS**: Latih model supaya bicara bahasa Indonesia dari dataset audio + transkrip sendiri
+- **Image Generation**: Generate gambar dengan Stable Diffusion (diffusers) — model ditaruh manual di `server/storage/diffusers/`, tanpa unduh otomatis
 - **Riwayat & Pemulihan**: Unggahan terbaru, job yang gagal bisa dijalankan ulang, dan riwayat bisa dihapus
 - **Offline-first**: Kode Demucs di-vendor penuh; bobot model hanya perlu diunduh sekali
 
@@ -40,7 +41,7 @@ Halaman untuk melatih ulang model kafka agar bisa berbicara bahasa Indonesia, le
 
 - **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS
 - **Backend**: Python, FastAPI, Uvicorn
-- **Audio ML**: Demucs 4 (di-vendor), PyTorch, VITS
+- **Audio/Image ML**: Demucs 4 (di-vendor), PyTorch, VITS, Stable Diffusion (diffusers)
 - **Audio di Browser**: Web Audio API, OfflineAudioContext, AnalyserNode
 - **Proksi**: Next.js `rewrites()` meneruskan `/api/*` ke FastAPI (port 8000)
 
@@ -71,7 +72,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-`requirements.txt` menginstall Demucs dari folder lokal `vendor/demucs` (bukan
+`requirements.txt` menginstall Demucs dari folder lokal `vendor/stem` (bukan
 `pip install git+https://...`), jadi proses ini tidak butuh akses ke GitHub sama sekali.
 
 ### 3. Install Dependencies Frontend
@@ -100,16 +101,18 @@ Waves/
 │   ├── main.py                  # API: upload, status job, download stem, retry, hapus
 │   ├── jobs.py                  # Job store (snapshot JSON + rekonsiliasi dari disk)
 │   ├── separator.py             # Menjalankan Demucs & parsing progress live
+│   ├── diffusers.py             # Image generation Stable Diffusion (diffusers, lokal-only)
 │   ├── voice.py                 # TTS VITS (katalog model, synthesize, cover)
 │   ├── tts.py                   # Inti inferensi VITS
 │   ├── training.py              # Router endpoint fine-tune
 │   ├── finetune.py              # Pipeline pelatihan VITS dari dataset
 │   └── storage/
 │       ├── models/              # Model suara VITS + katalog info.json
+│       ├── diffusers/           # Model Stable Diffusion (ditaruh manual, tanpa unduh)
 │       ├── uploads/             # File audio yang di-upload user
 │       ├── separated/           # Hasil pemisahan stem
 │       └── datasets/            # Dataset fine-tune
-├── vendor/demucs/               # Sumber Demucs di-vendor (offline, tanpa GitHub)
+├── vendor/stem/                 # Sumber Demucs di-vendor (offline, tanpa GitHub)
 ├── src/                         # Frontend Next.js 15 (App Router) + TypeScript
 │   ├── app/                     # layout.tsx, page.tsx, voice/, training/
 │   ├── components/              # App, Mixer, ChannelStrip, VoiceStudio, TrainStudio, Dropdown, dst.
@@ -149,11 +152,11 @@ Untuk backend production, jalankan uvicorn tanpa `--reload` di belakang reverse 
 
 ## 🛠️ Troubleshooting
 
-- **`No module named 'demucs'`** — demucs terpasang *editable* dari `vendor/demucs`; jika folder aslinya dipindah, install ulang: `pip install -e "vendor/demucs"`.
-- **`torchcodec` lib not found** — versi `torchaudio` terbaru mewajibkan `torchcodec`; sudah dipatch di `vendor/demucs/demucs/audio.py` untuk menyimpan WAV/FLAC via `soundfile`, tanpa `torchaudio.save`.
+- **`No module named 'demucs'`** — demucs terpasang *editable* dari `vendor/stem`; jika folder aslinya dipindah, install ulang: `pip install -e "vendor/stem"`.
+- **`torchcodec` lib not found** — versi `torchaudio` terbaru mewajibkan `torchcodec`; sudah dipatch di `vendor/stem/demucs/audio.py` untuk menyimpan WAV/FLAC via `soundfile`, tanpa `torchaudio.save`.
 - **Separation selalu gagal** — `separator.py` memakai `sys.executable` (interpreter venv yang sama), bukan `python3` hardcoded. Pastikan backend dijalankan dari venv proyek.
 - **`getaddrinfo failed` saat unduh bobot** — unduh manual checkpoint dengan `curl.exe -L` ke folder cache di atas, lalu restart backend.
-- **`pip install` gagal soal batas versi** — longgarkan batas atas versi di `vendor/demucs/requirements_minimal.txt` (pola: `torchaudio>=0.8` tanpa batas atas).
+- **`pip install` gagal soal batas versi** — longgarkan batas atas versi di `vendor/stem/requirements_minimal.txt` (pola: `torchaudio>=0.8` tanpa batas atas).
 
 ## 🐛 Bug Reports & Feature Requests
 

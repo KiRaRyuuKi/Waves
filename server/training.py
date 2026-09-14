@@ -1,4 +1,4 @@
-"""Fine-tune VITS (kafka) ke bahasa Indonesia — API + sesi latih.
+"""Fine-tune VITS ke bahasa Indonesia — API + sesi latih.
 
 Alur penggunaan:
   1. POST /api/training/datasets   upload audio (list) + transkrip (JSON).
@@ -19,6 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from . import devices
 from . import finetune
 from . import tts
 from .separator import STORAGE_ROOT
@@ -43,7 +44,7 @@ def _slugify(name: str) -> str:
 
 
 def _unique_model_id(name: str) -> str:
-    base = _slugify(name) or "kafka-id"
+    base = _slugify(name)
     candidate = base
     n = 2
     while (tts.MODELS_DIR / candidate).exists():
@@ -183,13 +184,44 @@ async def delete_dataset(dataset_id: str):
     return {"ok": True}
 
 
+def _base_model_speaker_id(base_model: str) -> int:
+    info = tts._load_info_index().get(base_model) or {}
+    sid = int(info.get("sid", 0) or 0)
+    meta = tts._load_json(tts.MODELS_DIR / base_model / "meta.json")
+    if isinstance(meta, dict):
+        sid = int(meta.get("default_sid", sid) or sid)
+        speakers = meta.get("speakers")
+        if isinstance(speakers, list) and speakers:
+            sid = int(speakers[0].get("id", sid))
+    return sid
+
+
+@router.get("/base_models")
+async def list_base_models():
+    """Model yang siap di-tune (punya checkpoint valid). User memilih sendiri
+    model mana yang jadi dasar fine-tune — tidak ada base model tetap."""
+    out = []
+    for model in tts.list_models():
+        if not model.get("ready"):
+            continue
+        out.append(
+            {
+                "id": model.get("id"),
+                "name": model.get("name", model.get("id")),
+                "language": model.get("language", ""),
+            }
+        )
+    return {"models": out}
+
+
 class TrainingStart(BaseModel):
     dataset_id: str
-    name: str = "kafka Indonesia"
+    name: str = "Model Indonesia"
     steps: int = _DEFAULT_STEPS
     learning_rate: float = _DEFAULT_LR
     sample_text: str = ""
-    base_model: str = "kafka"
+    base_model: str = ""
+    device: str = "auto"
 
 
 @router.post("/start")
@@ -207,9 +239,20 @@ async def start_training(params: TrainingStart):
     if not _dataset_entries(dataset_dir):
         raise HTTPException(404, "Dataset tidak ditemukan.")
 
-    index = tts._load_info_index()
-    info = index.get(params.base_model) or {}
-    speaker_id = int(info.get("sid", 0) or 0)
+    base_model = (params.base_model or "").strip()
+    if not base_model:
+        raise HTTPException(400, "Pilih model dasar dulu (model yang akan di-tune).")
+    base_ids = {m.get("id") for m in tts.list_models() if m.get("ready")}
+    if base_model not in base_ids:
+        raise HTTPException(
+            400, f"Model dasar '{base_model}' tidak ditemukan atau belum siap."
+        )
+    speaker_id = _base_model_speaker_id(base_model)
+
+    try:
+        resolved_device = devices.resolve_device(params.device)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     session_id = uuid.uuid4().hex[:8]
     steps = max(10, min(params.steps, _MAX_STEPS))
@@ -222,8 +265,9 @@ async def start_training(params: TrainingStart):
         "step": 0,
         "total": steps,
         "model_id": model_id,
-        "base_model": params.base_model,
+        "base_model": base_model,
         "speaker_id": speaker_id,
+        "device": resolved_device,
         "error": None,
         "done": False,
         "cancel": threading.Event(),
@@ -241,7 +285,8 @@ async def start_training(params: TrainingStart):
             lr,
             params.sample_text,
             speaker_id,
-            params.base_model,
+            base_model,
+            resolved_device,
         ),
         daemon=True,
     )
@@ -249,7 +294,7 @@ async def start_training(params: TrainingStart):
     return {"session_id": session_id, "model_id": model_id, "steps": steps}
 
 
-def _run_training(session, dataset_dir, model_id, steps, lr, sample_text, speaker_id, base_model):
+def _run_training(session, dataset_dir, model_id, steps, lr, sample_text, speaker_id, base_model, device):
     try:
         finetune.train_session(
             session,
@@ -260,6 +305,7 @@ def _run_training(session, dataset_dir, model_id, steps, lr, sample_text, speake
             sample_text=sample_text,
             speaker_id=speaker_id,
             base_model=base_model,
+            device=device,
         )
     except Exception:
         # session["error"] sudah diisi train_session; pastikan status tidak "training".
@@ -275,9 +321,9 @@ async def get_status(session_id: str):
         raise HTTPException(404, "Sesi tidak ditemukan.")
     keys = [
         "id", "status", "step", "total", "model_id", "base_model", "speaker_id",
-        "error", "done", "n_samples", "elapsed", "eta_seconds", "last_msg",
-        "last_checkpoint", "loss_gen", "loss_mel", "loss_kl", "loss_dur",
-        "loss_disc", "dataset_desc",
+        "device", "error", "done", "n_samples", "elapsed", "eta_seconds",
+        "last_msg", "last_checkpoint", "loss_gen", "loss_mel", "loss_kl",
+        "loss_dur", "loss_disc", "dataset_desc",
     ]
     return {k: session.get(k) for k in keys}
 

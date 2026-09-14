@@ -8,6 +8,7 @@ export interface JobState {
   stems: string[];
   error: string | null;
   model: string;
+  device?: string;
   filename?: string | null;
 }
 
@@ -15,6 +16,7 @@ export interface RecentJob {
   id: string;
   filename: string;
   model: string;
+  device?: string;
   status: JobStatus;
   stage: string;
   stems: string[];

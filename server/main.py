@@ -3,13 +3,18 @@ from __future__ import annotations
 import shutil
 import threading
 import uuid
-from pathlib import Path
+import logging
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, Form
+logging.getLogger("numba").setLevel(logging.WARNING)
+
+from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, HTTPException, UploadFile, Form
 
+from . import devices
 from .jobs import Job, JobStatus, store
+from .diffusers import router as diffusers_router
 from .separator import OUTPUT_ROOT, STORAGE_ROOT, run_separation, stem_file_path
 from .training import router as training_router
 from .voice import router as voice_router
@@ -25,17 +30,26 @@ app.add_middleware(
 
 app.include_router(voice_router)
 app.include_router(training_router)
+app.include_router(diffusers_router)
+app.include_router(devices.router)
 
 UPLOAD_ROOT = STORAGE_ROOT / "uploads"
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_MODELS = {"htdemucs", "htdemucs_ft", "mdx_extra"}
 
-
 @app.post("/api/jobs")
-async def create_job(file: UploadFile = File(...), model: str = Form("htdemucs")):
+async def create_job(
+    file: UploadFile = File(...),
+    model: str = Form("htdemucs"),
+    device: str = Form("auto"),
+):
     if model not in ALLOWED_MODELS:
         raise HTTPException(400, f"Unknown model '{model}'")
+    try:
+        resolved_device = devices.resolve_device(device)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     job_id = uuid.uuid4().hex
     job_dir = UPLOAD_ROOT / job_id
@@ -49,10 +63,12 @@ async def create_job(file: UploadFile = File(...), model: str = Form("htdemucs")
     with input_path.open("wb") as out:
         shutil.copyfileobj(file.file, out)
 
-    job = Job(id=job_id, model=model, original_filename=file.filename or "input")
+    job = Job(id=job_id, model=model, original_filename=file.filename or "input", device=device)
     store.create(job)
 
-    thread = threading.Thread(target=run_separation, args=(job_id, input_path, model), daemon=True)
+    thread = threading.Thread(
+        target=run_separation, args=(job_id, input_path, model, resolved_device), daemon=True
+    )
     thread.start()
 
     return {"job_id": job_id}
@@ -70,6 +86,7 @@ async def list_jobs(limit: int = 20):
             "stems": job.stems,
             "error": job.error,
             "model": job.model,
+            "device": job.device,
             "filename": job.original_filename,
             "created_at": job.created_at,
         }
@@ -90,6 +107,7 @@ async def get_job(job_id: str):
         "stems": job.stems,
         "error": job.error,
         "model": job.model,
+        "device": job.device,
         "filename": job.original_filename,
     }
 
@@ -118,8 +136,16 @@ async def retry_job(job_id: str):
         error=None,
     )
 
+    try:
+        resolved_device = devices.resolve_device(job.device)
+    except ValueError as exc:
+        store.update(job_id, status=JobStatus.ERROR, error=str(exc))
+        raise HTTPException(400, str(exc)) from exc
+
     thread = threading.Thread(
-        target=run_separation, args=(job_id, matches[0], job.model), daemon=True
+        target=run_separation,
+        args=(job_id, matches[0], job.model, resolved_device),
+        daemon=True,
     )
     thread.start()
     return {"job_id": job.id}

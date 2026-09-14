@@ -1,5 +1,23 @@
 import type { JobState, ModelId, RecentJob } from "./types";
 
+export function isBackendDown(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message;
+  if (msg.startsWith("{")) return false;
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes("fetch failed") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("internal server error") ||
+    lower === "request failed (500)" ||
+    lower === "500"
+  );
+}
+
+export const BACKEND_DOWN_HINT =
+  'Backend belum dijalankan. Mulai dulu dengan `python -m uvicorn server.main:app --port 8000`, lalu muat ulang halaman ini. Panel di bawah dinonaktifkan sampai backend menyala.';
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
@@ -8,10 +26,15 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function uploadTrack(file: File, model: ModelId): Promise<{ job_id: string }> {
+export async function uploadTrack(
+  file: File,
+  model: ModelId,
+  device: string = "auto"
+): Promise<{ job_id: string }> {
   const form = new FormData();
   form.append("file", file);
   form.append("model", model);
+  form.append("device", device);
   const res = await fetch("/api/jobs", { method: "POST", body: form });
   return json(res);
 }

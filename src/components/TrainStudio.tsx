@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Dropdown, { type DropdownOption } from "./Dropdown";
+import { useDevice } from "../lib/deviceContext";
 import {
   deleteTrainingDataset,
+  fetchBaseModels,
   fetchTrainingDatasets,
   fetchTrainingStatus,
   fetchTrainedModels,
@@ -11,6 +13,7 @@ import {
   stopTraining,
   updateTrainingTranscript,
   uploadTrainingDataset,
+  type BaseModel,
   type TrainingDataset,
   type TrainedModel,
   type TrainingStatus,
@@ -33,6 +36,7 @@ function fmtDuration(seconds?: number): string {
 }
 
 export default function TrainStudio() {
+  const { device } = useDevice();
   const [datasets, setDatasets] = useState<TrainingDataset[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -46,6 +50,8 @@ export default function TrainStudio() {
   const [savingFile, setSavingFile] = useState<string | null>(null);
 
   const [trainDatasetId, setTrainDatasetId] = useState("");
+  const [baseModels, setBaseModels] = useState<BaseModel[]>([]);
+  const [baseModelId, setBaseModelId] = useState("");
   const [modelName, setModelName] = useState("");
   const [steps, setSteps] = useState(2000);
   const [lr, setLr] = useState(0.0002);
@@ -76,10 +82,19 @@ export default function TrainStudio() {
     }
   }, []);
 
+  const refreshBaseModels = useCallback(async () => {
+    try {
+      setBaseModels(await fetchBaseModels());
+    } catch {
+      /* abaikan — dropdown tetap bisa dipakai setelah server menyala */
+    }
+  }, []);
+
   useEffect(() => {
     refreshDatasets();
     refreshTrained();
-  }, [refreshDatasets, refreshTrained]);
+    refreshBaseModels();
+  }, [refreshDatasets, refreshTrained, refreshBaseModels]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -183,15 +198,21 @@ export default function TrainStudio() {
       setActionError("Pilih dataset yang akan dilatih.");
       return;
     }
+    if (!baseModelId) {
+      setActionError("Pilih model dasar yang akan di-tune.");
+      return;
+    }
     setStarting(true);
     setActionError(null);
     try {
       const res = await startTraining({
         datasetId: trainDatasetId,
+        baseModel: baseModelId,
         name: modelName,
         steps,
         learningRate: lr,
         sampleText,
+        device,
       });
       setSessionId(res.session_id);
       setStatus(null);
@@ -230,6 +251,20 @@ export default function TrainStudio() {
         ),
       })),
     [datasets]
+  );
+
+  const baseModelOptions: DropdownOption[] = useMemo(
+    () =>
+      baseModels.map((m) => ({
+        id: m.id,
+        label: m.name,
+        right: (
+          <span className="flex-shrink-0 text-[11px] text-ink-muted">
+            {m.language}
+          </span>
+        ),
+      })),
+    [baseModels]
   );
 
   return (
@@ -412,6 +447,19 @@ export default function TrainStudio() {
                 disabled={running}
               />
             </div>
+            <div>
+              <Dropdown
+                label="Model dasar (yang di-tune)"
+                value={baseModelId}
+                options={baseModelOptions}
+                onChange={(id) => {
+                  setBaseModelId(id);
+                  setActionError(null);
+                }}
+                placeholder="Pilih model…"
+                disabled={running}
+              />
+            </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Nama model</label>
@@ -465,14 +513,14 @@ export default function TrainStudio() {
               />
             </div>
             <div className="text-[11px] text-ink-muted">
-              Berbasis checkpoint kafka (speaker suara asli dipertahankan).
-              Pelatihan berjalan di background server (CPU); hasil muncul di
-              halaman Voice Synthesis sebagai model baru.
+              Model dasar yang dipilih menentukan suara awal yang di-tune;
+              speaker-nya dipertahankan. Pelatihan berjalan di background server;
+              hasil muncul di halaman Voice Synthesis sebagai model baru.
             </div>
             <div>
               <button
                 className="btn btn-primary"
-                disabled={starting || running || !trainDatasetId}
+                disabled={starting || running || !trainDatasetId || !baseModelId}
                 onClick={handleStart}
               >
                 {starting

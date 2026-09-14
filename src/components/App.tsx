@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDevice } from "../lib/deviceContext";
 import Toolbar from "./Toolbar";
 import UploadZone from "./UploadZone";
 import ProgressOverlay from "./ProgressOverlay";
@@ -30,6 +31,7 @@ interface LoadedStem {
 }
 
 export default function App() {
+  const { device } = useDevice();
   const [phase, setPhase] = useState<Phase>("idle");
   const [job, setJob] = useState<JobState | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -227,7 +229,7 @@ export default function App() {
       setErrorMessage(null);
       setFileName(file.name);
       try {
-        const { job_id } = await uploadTrack(file, model);
+        const { job_id } = await uploadTrack(file, model, device);
         setJob({
           id: job_id,
           status: "queued",
@@ -236,6 +238,7 @@ export default function App() {
           stems: [],
           error: null,
           model,
+          device,
           filename: file.name,
         });
         setPhase("processing");
@@ -245,7 +248,7 @@ export default function App() {
         setPhase("error");
       }
     },
-    [refreshRecent]
+    [refreshRecent, device]
   );
 
   const handlePlayPause = useCallback(async () => {

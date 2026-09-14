@@ -38,6 +38,7 @@ class Job:
     id: str
     model: str
     original_filename: str
+    device: str = "auto"
     status: JobStatus = JobStatus.QUEUED
     progress: float = 0.0  # 0..100
     stage: str = "Waiting to start"
@@ -95,6 +96,7 @@ class JobStore:
                     id=item["id"],
                     model=item.get("model", "htdemucs"),
                     original_filename=item.get("original_filename", "input"),
+                    device=item.get("device", "auto"),
                     status=JobStatus(item.get("status", JobStatus.ERROR.value)),
                     progress=float(item.get("progress", 0)),
                     stage=item.get("stage", ""),

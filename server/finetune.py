@@ -1,7 +1,7 @@
-"""Fine-tuning VITS (kafka base) ke bahasa Indonesia.
+"""Fine-tuning VITS ke bahasa Indonesia.
 
 Alur:
-  1. Muat bobot model dasar (kafka) + hyperparameter dari _default_config.json.
+  1. Muat bobot model dasar + hyperparameter dari _default_config.json.
   2. Baca pasangan audio+transkrip dari folder dataset (hasil upload API).
   3. Loop pelatihan GAN (generator + MultiPeriodDiscriminator) ala upstream
      vits/train.py, jalan di CPU tanpa perlu CUDA.
@@ -210,8 +210,9 @@ def train_session(
     learning_rate: float,
     sample_text: str,
     speaker_id: int,
-    base_model: str = "kafka",
+    base_model: str = "",
     save_every: int = 100,
+    device: str = "cpu",
 ) -> None:
     """Jalan di thread background; session = dict status yang dibaca UI."""
     import commons
@@ -220,6 +221,7 @@ def train_session(
     from losses import discriminator_loss, feature_loss, generator_loss, kl_loss
 
     session["status"] = "preparing"
+    session["device"] = device
     try:
         checkpoint_path = _base_checkpoint(base_model)
         hps = vits_utils.get_hparams_from_file(str(tts.DEFAULT_CONFIG_PATH))
@@ -231,6 +233,9 @@ def train_session(
             use_spectral_norm=getattr(hps.model, "use_spectral_norm", False)
         )
         net_d.train()
+        if device == "cuda":
+            net_g = net_g.cuda()
+            net_d = net_d.cuda()
 
         items, descriptions = load_dataset(dataset_dir)
         if not items:
@@ -282,6 +287,14 @@ def train_session(
             spec = item["spec"]
             spl = torch.LongTensor([spec.shape[-1]])
             y = item["audio"]
+
+            if device == "cuda":
+                x = x.cuda()
+                xl = xl.cuda()
+                spec = spec.cuda()
+                spl = spl.cuda()
+                y = y.cuda()
+                sid = sid.cuda()
 
             g_opt.zero_grad()
             d_opt.zero_grad()

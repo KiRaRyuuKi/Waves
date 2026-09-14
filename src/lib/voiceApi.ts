@@ -34,6 +34,7 @@ export interface SynthesizeParams {
   noiseScale: number;
   noiseScaleW: number;
   lengthScale: number;
+  device?: string;
 }
 
 export async function synthesizeVoice(params: SynthesizeParams): Promise<Blob> {
@@ -47,6 +48,7 @@ export async function synthesizeVoice(params: SynthesizeParams): Promise<Blob> {
       noise_scale: params.noiseScale,
       noise_scale_w: params.noiseScaleW,
       length_scale: params.lengthScale,
+      device: params.device ?? "auto",
     }),
   });
   if (!res.ok) {

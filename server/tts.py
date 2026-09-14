@@ -25,6 +25,12 @@ from typing import Optional
 import numpy as np
 import torch
 
+# NOTE: `torch.load` di PyTorch 2.14 membutuhkan `torch.utils.serialization` +
+# submodul `config`, yang sempat hilang pada instalasi lama dan memicu
+# `No module named 'torch.utils.serialization'`. Setelah torch di-install
+# ulang dari wheel resmi, paket itu tersedia lagi dan import normal bekerja —
+# jangan pasang shim/modul tiruan di sini, karena akan menimpa paket asli
+# dan malah membuat import gagal.
 VENDOR_VITS_DIR = Path(__file__).resolve().parent.parent / "vendor" / "vits"
 if str(VENDOR_VITS_DIR) not in sys.path:
     # The vendored VITS modules (commons.py, models.py, text/, ...) use
@@ -54,7 +60,7 @@ class VoiceModel:
     sampling_rate: int
 
 
-_cache: dict[str, VoiceModel] = {}
+_cache: dict[tuple[str, str], VoiceModel] = {}
 
 
 def _load_json(path: Path) -> dict | None:
@@ -117,7 +123,7 @@ def _shared_weights_path(size: int) -> Path | None:
     """Cari file .pth asli (bukan pointer) dengan ukuran byte yang sama di koleksi.
     Kumpulan karakter di folder ini adalah satu model multi-speaker yang disalin per
     karakter — selama pointer LFS-nya menyebut ukuran yang sama, bobotnya bisa dipakai
-    bersama dari file yang sudah ter-download (mis. kafka.pth)."""
+    bersama dari file yang sudah ter-download."""
     if not MODELS_DIR.exists():
         return None
     for entry in sorted(MODELS_DIR.iterdir()):
@@ -204,7 +210,14 @@ def _load_state_dict(checkpoint_path: Path) -> dict:
     # which training/finetuning script produced them: a plain state_dict,
     # or a dict wrapping one under a "model"/"state_dict" key alongside
     # training metadata (iteration, optimizer, ...). Handle both.
-    obj = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    try:
+        obj = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            f"Gagal membaca checkpoint {checkpoint_path}: modul lama "
+            f"`{exc.name}` tidak tersedia di PyTorch ini. Konversikan "
+            "checkpoint ke format state_dict baru, atau gunakan model lain."
+        ) from exc
     if isinstance(obj, dict):
         for key in ("model", "state_dict", "generator"):
             if key in obj and isinstance(obj[key], dict):
@@ -215,7 +228,7 @@ def _load_state_dict(checkpoint_path: Path) -> dict:
     )
 
 
-def _get_or_load(model_id: str) -> VoiceModel:
+def _get_or_load(model_id: str, device: str = "cpu") -> VoiceModel:
     model_dir = MODELS_DIR / model_id
     if not model_dir.is_dir():
         raise FileNotFoundError(f"Model '{model_id}' tidak ditemukan di {MODELS_DIR}")
@@ -247,7 +260,7 @@ def _get_or_load(model_id: str) -> VoiceModel:
             "dan tidak ada model lain dengan ukuran sama di koleksi."
         )
 
-    cache_key = str(checkpoint_path) if shared_checkpoint else model_id
+    cache_key = (str(checkpoint_path) if shared_checkpoint else model_id, device)
     if cache_key in _cache:
         return _cache[cache_key]
 
@@ -267,6 +280,9 @@ def _get_or_load(model_id: str) -> VoiceModel:
     missing_or_unexpected = net_g.load_state_dict(state_dict, strict=False)
     if missing_or_unexpected.missing_keys:
         print(f"[vits] {model_id}: {len(missing_or_unexpected.missing_keys)} tensor tidak ada di checkpoint")
+
+    if device == "cuda":
+        net_g = net_g.cuda()
 
     entry = VoiceModel(net_g=net_g, hps=hps, n_speakers=n_speakers, sampling_rate=hps.data.sampling_rate)
     _cache[cache_key] = entry
@@ -311,9 +327,10 @@ def synthesize(
     noise_scale: float = 0.667,
     noise_scale_w: float = 0.8,
     length_scale: float = 1.0,
+    device: str = "cpu",
 ) -> tuple[int, np.ndarray]:
     """Returns (sample_rate, mono float32 waveform)."""
-    model = _get_or_load(model_id)
+    model = _get_or_load(model_id, device)
     text_ids = _prepare_text(text, model.hps)
 
     with torch.no_grad():
@@ -322,6 +339,11 @@ def synthesize(
         sid: Optional[torch.LongTensor] = (
             torch.LongTensor([speaker_id]) if model.n_speakers > 0 else None
         )
+        if device == "cuda":
+            x_tst = x_tst.cuda()
+            x_tst_lengths = x_tst_lengths.cuda()
+            if sid is not None:
+                sid = sid.cuda()
         audio = model.net_g.infer(
             x_tst,
             x_tst_lengths,

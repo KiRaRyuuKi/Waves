@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import io
+import traceback
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from . import devices
 from . import tts
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
@@ -33,6 +35,7 @@ class SynthesizeRequest(BaseModel):
     noise_scale: float = 0.667
     noise_scale_w: float = 0.8
     length_scale: float = 1.0
+    device: str = "auto"
 
 
 @router.post("/synthesize")
@@ -40,6 +43,7 @@ def synthesize(req: SynthesizeRequest):
     # Declared as a plain `def` (not async) so FastAPI runs this CPU-bound
     # inference in its worker threadpool instead of blocking the event loop.
     try:
+        resolved_device = devices.resolve_device(req.device)
         sample_rate, audio = tts.synthesize(
             model_id=req.model_id,
             text=req.text,
@@ -47,11 +51,19 @@ def synthesize(req: SynthesizeRequest):
             noise_scale=req.noise_scale,
             noise_scale_w=req.noise_scale_w,
             length_scale=req.length_scale,
+            device=resolved_device,
         )
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     except Exception as exc:  # noqa: BLE001 - surface inference failures as 500s with detail
-        raise HTTPException(500, f"Sintesis gagal: {exc}")
+        detail = f"Sintesis gagal: {exc}"
+        tb = traceback.format_exc()
+        traceback.print_exc()
+        if tb:
+            detail += f"\n\nTraceback:\n{tb}"
+        raise HTTPException(500, detail) from exc
 
     import soundfile as sf
 
