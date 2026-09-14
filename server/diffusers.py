@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from . import devices
 
-router = APIRouter(prefix="/api/sd", tags=["sd"])
+router = APIRouter(prefix="/api", tags=["sd"])
 
 MODELS_DIR = Path(__file__).resolve().parent / "storage" / "diffusers"
 

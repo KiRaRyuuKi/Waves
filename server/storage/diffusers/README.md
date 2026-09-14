@@ -71,8 +71,8 @@ Tanpa `meta.json`, nama folder dipakai apa adanya.
 
 1. Taruh model di `server/storage/diffusers/<model_id>/`.
 2. Mulai backend: `uvicorn server.main:app --port 8000`.
-3. `GET /api/sd/models` — pastikan model muncul.
-4. `POST /api/sd/generate` dengan `{"model_id": "<id>", "prompt": "..."}`.
+3. `GET /api/models` — pastikan model muncul.
+4. `POST /api/generate` dengan `{"model_id": "<id>", "prompt": "..."}`.
 
 Bobot model (.safetensors/.ckpt/.bin, multi-GB) sengaja di-ignore oleh
 git; `README.md`, `meta.json`, dan `config.json` boleh di-commit.

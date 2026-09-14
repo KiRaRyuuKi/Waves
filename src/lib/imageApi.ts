@@ -8,11 +8,11 @@ export interface SdModelInfo {
 const cacheBust = `v=${Date.now()}`;
 
 export function sdCoverUrl(modelId: string): string {
-  return `/api/sd/models/${encodeURIComponent(modelId)}/cover?${cacheBust}`;
+  return `/api/models/${encodeURIComponent(modelId)}/cover?${cacheBust}`;
 }
 
 export async function fetchSdModels(): Promise<SdModelInfo[]> {
-  const res = await fetch("/api/sd/models");
+  const res = await fetch("/api/models");
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   return data.models;
@@ -39,7 +39,7 @@ export interface GenerateImageResult {
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerateImageResult> {
-  const res = await fetch("/api/sd/generate", {
+  const res = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
