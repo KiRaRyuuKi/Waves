@@ -6,13 +6,11 @@ server/storage/separated/*
 server/storage/training/*
 server/storage/uploads/*
 
-# Stable Diffusion weights (multi-GB) — jangan di-commit
 server/storage/diffusers/*/
 server/storage/diffusers/*.safetensors
 server/storage/diffusers/*.ckpt
 
-# Torch wheels (multi-GB) - jangan di-commit
-server/storage/torch/
+server/storage/torch/*
 
 .waves
 
