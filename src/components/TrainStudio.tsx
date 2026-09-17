@@ -276,7 +276,7 @@ export default function TrainStudio() {
       </div>
 
       {(actionError || loadError) && (
-        <div className="card mb-4 p-4 text-[13px] text-red-600">
+        <div className="rounded-md border border-edge bg-red-50 mb-4 px-4 py-3 text-[12px] text-red-600">
           {actionError || loadError}
         </div>
       )}
@@ -514,13 +514,16 @@ export default function TrainStudio() {
             </div>
             <div className="text-[11px] text-ink-muted">
               Model dasar yang dipilih menentukan suara awal yang di-tune;
-              speaker-nya dipertahankan. Pelatihan berjalan di background server;
-              hasil muncul di halaman Voice Synthesis sebagai model baru.
+              speaker-nya dipertahankan. Pelatihan berjalan di background
+              server; hasil muncul di halaman Voice Synthesis sebagai model
+              baru.
             </div>
             <div>
               <button
                 className="btn btn-primary"
-                disabled={starting || running || !trainDatasetId || !baseModelId}
+                disabled={
+                  starting || running || !trainDatasetId || !baseModelId
+                }
                 onClick={handleStart}
               >
                 {starting

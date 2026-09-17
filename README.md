@@ -43,14 +43,14 @@ Halaman untuk melatih ulang model agar bisa berbicara bahasa Indonesia, lengkap 
 - **Backend**: Python, FastAPI, Uvicorn
 - **Audio/Image ML**: Demucs 4 (di-vendor), PyTorch, VITS, Stable Diffusion (diffusers)
 - **Audio di Browser**: Web Audio API, OfflineAudioContext, AnalyserNode
-- **Proksi**: Next.js `rewrites()` meneruskan `/api/*` ke FastAPI (port 8000)
+- **Proksi**: Next.js `rewrites()` meneruskan `/api/*` ke FastAPI (port 9035)
 
 ## 📋 Persyaratan Sistem
 
 - Node.js 18.x (atau lebih baru) dan NPM
 - Python 3.10+ (disarankan 3.11/3.12)
 - **FFmpeg** terpasang & berada di PATH (untuk membaca berbagai format audio)
-- Koneksi internet **saat pertama kali** memakai model Demucs (untuk mengunduh bobot model, ratusan MB)
+- Koneksi internet **saat pertama kali** memakai model Demucs (untuk mengunduh bobot model, ratusan MB) — atau unduh lebih dulu lewat menu **Setup & Runtime** → **Stem Separator** supaya langsung siap pakai
 
 ## ⚙️ Instalasi dan Setup
 
@@ -80,18 +80,52 @@ pip install -r requirements.txt
 npm install
 ```
 
-### 4. Jalankan Server Backend
+### 4. Jalankan Sekaligus (Backend + Frontend) — opsional
+Satu perintah menjalankan backend uvicorn dan frontend Next.js bersamaan di
+background, membuka aplikasi otomatis di browser. Runner menampilkan terminal
+bergaya installer: logo ASCII, menu navigasi panah (mode run & interface), log
+ber-timestamp `[HH:MM:SS] [ok]`, dan spinner menunggu backend siap.
+
 ```bash
-uvicorn server.main:app --port 8000
+npm run waves
 ```
 
-### 5. Jalankan Development Server Frontend
+Runner akan:
+- menampilkan *Choose Interface* (menu panah): Web UI / Background / Exit,
+- cek & install otomatis dependensi Node/Python (venv + requirements) saat run pertama,
+- menanyakan mode: *Development* (next dev) atau *Production* (next start),
+- menulis status proses ke `.waves/state.json` agar server bisa dihentikan/di-restart
+  dari tombol server di sidebar, atau perintah:
+  ```bash
+  npm stop waves       # sama dengan `npm stop` — hentikan semua server
+  npm restart waves    # sama dengan `npm restart` — restart backend saja
+  ```
+  (`waves` di sini hanya penegas; `npm stop`/`npm restart` sendiri sudah cukup.)
+
+Backend berjalan di `http://localhost:9035`, frontend di `http://localhost:3095`.
+Lewati dialog interaktif dengan flag:
+```bash
+node scripts/start.mjs --mode=start        # langsung mode produksi (otomatis build bila perlu)
+node scripts/start.mjs --mode=dev          # langsung mode development
+node scripts/start.mjs --action=background # start tanpa membuka browser
+node scripts/start.mjs --no-browser        # jalankan tapi jangan buka browser
+node scripts/start.mjs --yes               # setujui otomatis semua prompt setup
+```
+
+### 5. Atau Jalankan Manual Terpisah
+
+#### 5a. Server Backend
+```bash
+uvicorn server.main:app --port 9035
+```
+
+#### 5b. Development Server Frontend
 ```bash
 npm run dev
 ```
 
-Buka [http://localhost:3000](http://localhost:3000) — Next.js otomatis meneruskan
-request `/api/*` ke backend di port 8000, jadi **kedua server harus jalan bersamaan**.
+Buka [http://localhost:3095](http://localhost:3095) — Next.js otomatis meneruskan
+request `/api/*` ke backend di port 9035, jadi **kedua server harus jalan bersamaan**.
 
 ## 📑 Struktur Direktori
 
@@ -122,7 +156,7 @@ Waves/
 │   └── screenshots/             # Screenshot antarmuka
 ├── requirements.txt
 ├── package.json
-├── next.config.js               # Proxy /api/* → backend FastAPI (localhost:8000)
+├── next.config.js               # Proxy /api/* → backend FastAPI (localhost:9035)
 └── README.md
 ```
 
@@ -145,6 +179,7 @@ Untuk backend production, jalankan uvicorn tanpa `--reload` di belakang reverse 
 
 ### Catatan Model Offline
 - Bobot model Demucs diunduh dari `dl.fbaipublicfiles.com` **saat pertama kali** dipakai, lalu disimpan di cache `~/.cache/torch/hub/checkpoints/` (Windows: `C:\Users\<nama>\.cache\torch\hub\checkpoints\`). Setelah itu semua proses pemisahan berjalan 100% offline.
+- Atau, **unduh lebih dulu** lewat menu **Setup & Runtime** di aplikasi — pilih salah satu dari `Stem Model — Standard`, `High Quality`, atau `Alternative`, lalu unduh (dan jalankan ulang jika lama terputus). Setelah selesai bobot langsung tersimpan di cache dan siap dipakai tanpa menunggu unduhan pertama saat memisahkan lagu.
 - Jika mesin tidak punya internet sama sekali, unduh manual checkpoint berikut dari mesin lain lalu taruh di folder cache:
   - `htdemucs` → `955717e8-8726e21a.th` (`hybrid_transformer/`)
   - `htdemucs_ft` → `f7e0c4bc-ba3fe64a.th`, `d12395a8-e57c48e6.th`, `92cfc3b6-ef3bcb9c.th`, `04573f0d-f3cf25b2.th` (`hybrid_transformer/`)

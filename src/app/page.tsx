@@ -1,5 +1,5 @@
-import App from "@/components/App";
+import StemDemucs from "@/components/StemDemucs";
 
 export default function Page() {
-  return <App />;
+  return <StemDemucs />;
 }

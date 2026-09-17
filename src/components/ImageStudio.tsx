@@ -129,26 +129,29 @@ export default function ImageStudio() {
     <main className="w-full pb-12">
       <div className="mb-1 text-sm font-semibold">Image Generation</div>
       <div className="mb-4 text-xs text-ink-muted">
-        Generate gambar dengan Stable Diffusion (diffusers, 100% lokal). Bobot model
-        tidak diunduh otomatis — taruh manual di folder model.
+        Generate gambar dengan Stable Diffusion. Pilih model, masukkan prompt, dan klik Generate.
       </div>
 
       {loadError && (
-        <div className="card mb-4 p-4 text-[13px] text-red-600">{loadError}</div>
+        <div className="card mb-4 p-4 text-[13px] text-red-600">
+          {loadError}
+        </div>
       )}
 
       {models && models.length === 0 && (
         <div className="card p-5 mb-5 text-[13px] text-ink-muted">
           Belum ada model terpasang. Taruh checkpoint Stable Diffusion di{" "}
-          <code className="mono">server/storage/diffusers/&lt;id&gt;/</code> — bisa folder{" "}
-          <em>diffusers</em> lengkap (<code className="mono">model_index.json</code>) atau satu file{" "}
-          <code className="mono">*.safetensors</code>/<code className="mono">*.ckpt</code>. Lihat{" "}
+          <code className="mono">server/storage/diffusers/&lt;id&gt;/</code> —
+          bisa folder <em>diffusers</em> lengkap (
+          <code className="mono">model_index.json</code>) atau satu file{" "}
+          <code className="mono">*.safetensors</code>/
+          <code className="mono">*.ckpt</code>. Lihat{" "}
           <code className="mono">server/storage/diffusers/README.md</code>.
         </div>
       )}
 
       {(backendDown || models) && (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,380px)_1fr]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,450px)_1fr]">
           {/* Panel konfigurasi */}
           <div className="card flex flex-col gap-4 p-5">
             <Dropdown
@@ -166,7 +169,9 @@ export default function ImageStudio() {
                 onClick={() => setMode("txt2img")}
                 disabled={controlsDisabled}
                 className={`flex-1 rounded px-2 py-1.5 text-xs font-medium ${
-                  mode === "txt2img" ? "bg-white shadow-sm" : "text-ink-muted hover:text-ink"
+                  mode === "txt2img"
+                    ? "bg-white shadow-sm"
+                    : "text-ink-muted hover:text-ink"
                 }`}
               >
                 Teks → Gambar
@@ -176,7 +181,9 @@ export default function ImageStudio() {
                 onClick={() => setMode("img2img")}
                 disabled={controlsDisabled}
                 className={`flex-1 rounded px-2 py-1.5 text-xs font-medium ${
-                  mode === "img2img" ? "bg-white shadow-sm" : "text-ink-muted hover:text-ink"
+                  mode === "img2img"
+                    ? "bg-white shadow-sm"
+                    : "text-ink-muted hover:text-ink"
                 }`}
               >
                 Gambar → Gambar
@@ -184,7 +191,9 @@ export default function ImageStudio() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold text-ink-muted">Prompt</label>
+              <label className="mb-1 block text-xs font-semibold text-ink-muted">
+                Prompt
+              </label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -199,7 +208,8 @@ export default function ImageStudio() {
 
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-muted">
-                Negative prompt <span className="font-normal text-ink-subtle">(opsional)</span>
+                Negative prompt{" "}
+                <span className="font-normal text-ink-subtle">(opsional)</span>
               </label>
               <textarea
                 value={negativePrompt}
@@ -237,7 +247,9 @@ export default function ImageStudio() {
                       className="h-14 w-14 rounded border border-edge object-cover"
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-medium">{initFile.name}</div>
+                      <div className="truncate text-xs font-medium">
+                        {initFile.name}
+                      </div>
                       <button
                         type="button"
                         onClick={() => setInitFile(null)}
@@ -263,19 +275,25 @@ export default function ImageStudio() {
                     className="w-full"
                   />
                 </div>
-                {initError && <div className="text-[11px] text-red-600">{initError}</div>}
+                {initError && (
+                  <div className="text-[11px] text-red-600">{initError}</div>
+                )}
                 <div className="text-[11px] leading-relaxed text-ink-muted">
-                  Dimensi hasil mengikuti ukuran gambar awal. Nilai strength kecil = tetap mirip
-                  gambar asli; besar = lebih bebas.
+                  Dimensi hasil mengikuti ukuran gambar awal. Nilai strength
+                  kecil = tetap mirip gambar asli; besar = lebih bebas.
                 </div>
               </div>
             )}
 
             <details>
-              <summary className="cursor-pointer text-xs text-ink-muted">Opsi lanjutan</summary>
+              <summary className="cursor-pointer text-xs text-ink-muted">
+                Opsi lanjutan
+              </summary>
               <div className="mt-2.5 grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-[11px] text-ink-muted">Steps</label>
+                  <label className="mb-1 block text-[11px] text-ink-muted">
+                    Steps
+                  </label>
                   <input
                     type="number"
                     min={1}
@@ -287,14 +305,18 @@ export default function ImageStudio() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[11px] text-ink-muted">Guidance scale</label>
+                  <label className="mb-1 block text-[11px] text-ink-muted">
+                    Guidance scale
+                  </label>
                   <input
                     type="number"
                     step={0.5}
                     min={0}
                     max={30}
                     value={guidanceScale}
-                    onChange={(e) => setGuidanceScale(parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      setGuidanceScale(parseFloat(e.target.value) || 0)
+                    }
                     disabled={controlsDisabled}
                     className="w-full rounded-md border border-edge px-1.5 py-1 text-xs"
                   />
@@ -302,7 +324,9 @@ export default function ImageStudio() {
                 {mode === "txt2img" && (
                   <>
                     <div>
-                      <label className="mb-1 block text-[11px] text-ink-muted">Width (px)</label>
+                      <label className="mb-1 block text-[11px] text-ink-muted">
+                        Width (px)
+                      </label>
                       <select
                         value={width}
                         onChange={(e) => setWidth(parseInt(e.target.value))}
@@ -317,7 +341,9 @@ export default function ImageStudio() {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-[11px] text-ink-muted">Height (px)</label>
+                      <label className="mb-1 block text-[11px] text-ink-muted">
+                        Height (px)
+                      </label>
                       <select
                         value={height}
                         onChange={(e) => setHeight(parseInt(e.target.value))}
@@ -335,7 +361,10 @@ export default function ImageStudio() {
                 )}
                 <div>
                   <label className="mb-1 block text-[11px] text-ink-muted">
-                    Seed <span className="font-normal text-ink-subtle">(kosong = acak)</span>
+                    Seed{" "}
+                    <span className="font-normal text-ink-subtle">
+                      (kosong = acak)
+                    </span>
                   </label>
                   <input
                     type="number"
@@ -348,7 +377,9 @@ export default function ImageStudio() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[11px] text-ink-muted">Jumlah gambar</label>
+                  <label className="mb-1 block text-[11px] text-ink-muted">
+                    Jumlah gambar
+                  </label>
                   <select
                     value={nImages}
                     onChange={(e) => setNImages(parseInt(e.target.value))}
@@ -379,7 +410,9 @@ export default function ImageStudio() {
               {generating ? "Membuat gambar…" : "Generate"}
             </button>
 
-            {genError && <div className="text-[13px] text-red-600">{genError}</div>}
+            {genError && (
+              <div className="text-[13px] text-red-600">{genError}</div>
+            )}
           </div>
 
           {/* Hasil */}
@@ -388,7 +421,8 @@ export default function ImageStudio() {
               <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center gap-3 text-ink-muted">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-muted border-t-transparent" />
                 <div className="text-[13px]">
-                  Menjalankan inferensi… (tanpa GPU bisa butuh 30 detik hingga beberapa menit)
+                  Menjalankan inferensi… (tanpa GPU bisa butuh 30 detik hingga
+                  beberapa menit)
                 </div>
               </div>
             )}
@@ -400,13 +434,13 @@ export default function ImageStudio() {
             )}
 
             {!generating && images.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col items-center justify-center gap-3">
+                <div className="grid gap-3">
                   {images.map((src, i) => (
                     <a
                       key={i}
                       href={src}
-                      download={`waves-sd-${Date.now()}-${i}.png`}
+                      download={`waves-${Date.now()}-${i}.png`}
                       className="block overflow-hidden rounded-md border border-edge bg-canvas-subtle"
                       title="Klik untuk menyimpan"
                     >
@@ -420,8 +454,13 @@ export default function ImageStudio() {
                   ))}
                 </div>
                 <div className="text-[11px] text-ink-muted">
-                  {resultSeed !== null && <span>Seed: <code className="mono">{resultSeed}</code></span>}
-                  {resultSeed !== null && " · "}Klik gambar untuk menyimpan (PNG).
+                  {resultSeed !== null && (
+                    <span>
+                      Seed: <code className="mono">{resultSeed}</code>
+                    </span>
+                  )}
+                  {resultSeed !== null && " · "}Klik gambar untuk menyimpan
+                  (PNG).
                 </div>
               </div>
             )}

@@ -70,7 +70,7 @@ Tanpa `meta.json`, nama folder dipakai apa adanya.
 ## ⚙️ Validasi
 
 1. Taruh model di `server/storage/diffusers/<model_id>/`.
-2. Mulai backend: `uvicorn server.main:app --port 8000`.
+2. Mulai backend: `uvicorn server.main:app --port 9035`.
 3. `GET /api/models` — pastikan model muncul.
 4. `POST /api/generate` dengan `{"model_id": "<id>", "prompt": "..."}`.
 

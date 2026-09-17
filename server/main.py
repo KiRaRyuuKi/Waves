@@ -15,22 +15,28 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, Form
 from . import devices
 from .jobs import Job, JobStatus, store
 from .diffusers import router as diffusers_router
+from .downloader import router as downloader_router
 from .separator import OUTPUT_ROOT, STORAGE_ROOT, run_separation, stem_file_path
+from .setup import router as setup_router
 from .training import router as training_router
 from .voice import router as voice_router
 
 app = FastAPI(title="Waves API")
 
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3095", "http://127.0.0.1:3095"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 app.include_router(voice_router)
 app.include_router(training_router)
 app.include_router(diffusers_router)
+app.include_router(downloader_router)
+app.include_router(setup_router)
 app.include_router(devices.router)
 
 UPLOAD_ROOT = STORAGE_ROOT / "uploads"

@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
+import SetupModal from "@/components/SetupModal";
+import ServerControl from "@/components/ServerControl";
 
 interface NavItem {
   href: string;
@@ -14,7 +17,11 @@ const NAV: NavItem[] = [
     href: "/",
     label: "Stem Separator",
     icon: (
-      <path d="M3 14c1.5-4 3-6 4.5-6s3 4 4.5 4 3-6 4.5-6 3 4 4.5 8" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M3 14c1.5-4 3-6 4.5-6s3 4 4.5 4 3-6 4.5-6 3 4 4.5 8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     ),
   },
   {
@@ -48,10 +55,22 @@ const NAV: NavItem[] = [
       </>
     ),
   },
+  {
+    href: "/downloader",
+    label: "Media Downloader",
+    icon: (
+      <>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </>
+    ),
+  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [setupOpen, setSetupOpen] = useState(false);
 
   return (
     <aside className="flex h-full min-h-0 w-64 flex-shrink-0 flex-col overflow-hidden rounded-md border border-edge bg-white shadow-soft">
@@ -61,7 +80,7 @@ export default function Sidebar() {
           <path d="M3 14c1.5-4 3-6 4.5-6s3 4 4.5 4 3-6 4.5-6 3 4 4.5 8" />
         </svg>
       </div>
-      <nav className="min-h-0 overflow-y-auto p-2">
+      <nav className="min-h-0 flex-1 overflow-y-auto p-2">
         {NAV.map((item) => {
           const active = pathname === item.href;
           return (
@@ -74,7 +93,7 @@ export default function Sidebar() {
                   : "text-ink-muted hover:bg-canvas-subtle"
               }`}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 {item.icon}
               </svg>
               {item.label}
@@ -82,6 +101,20 @@ export default function Sidebar() {
           );
         })}
       </nav>
+      <div className="flex flex-shrink-0 gap-2 border-t border-edge p-2">
+        <button
+          onClick={() => setSetupOpen(true)}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-ink px-2.5 py-[8px] text-[13px] font-medium text-white shadow-soft transition-colors hover:bg-ink-strong"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Setup &amp; Runtime
+        </button>
+        <ServerControl />
+      </div>
+      <SetupModal open={setupOpen} onClose={() => setSetupOpen(false)} />
     </aside>
   );
 }

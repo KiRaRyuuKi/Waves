@@ -11,6 +11,11 @@ server/storage/diffusers/*/
 server/storage/diffusers/*.safetensors
 server/storage/diffusers/*.ckpt
 
+# Torch wheels (multi-GB) - jangan di-commit
+server/storage/torch/
+
+.waves
+
 venv/
 .venv/
 

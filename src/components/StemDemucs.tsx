@@ -30,7 +30,7 @@ interface LoadedStem {
   peaks: Peaks;
 }
 
-export default function App() {
+export default function StemDemucs() {
   const { device } = useDevice();
   const [phase, setPhase] = useState<Phase>("idle");
   const [job, setJob] = useState<JobState | null>(null);

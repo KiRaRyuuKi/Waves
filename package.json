@@ -3,11 +3,13 @@
   "private": true,
   "version": "0.1.5-alpha",
   "scripts": {
-    "dev": "next dev",
-    "dev:all": "node scripts/dev.mjs",
+    "dev": "next dev -p 3095",
+    "start": "next start -p 3095",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "waves": "node scripts/start.mjs",
+    "stop": "node scripts/stop.mjs",
+    "restart": "node scripts/restart.mjs"
   },
   "dependencies": {
     "next": "^15.5.25",

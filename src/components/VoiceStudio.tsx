@@ -140,19 +140,22 @@ export default function VoiceStudio() {
     <main className="w-full pb-12">
       <div className="mb-1 text-sm font-semibold">Voice Synthesis</div>
       <div className="mb-4 text-xs text-ink-muted">
-        Sintesis suara karakter berbasis VITS, jalan lokal. Pilih game dan karakter di bawah.
+        Sintesis suara karakter berbasis VITS. Pilih game dan karakter, masukkan teks, lalu klik Generate.
       </div>
 
       {loadError && (
-        <div className="card mb-4 p-4 text-[13px] text-red-600">{loadError}</div>
+        <div className="rounded-md border border-edge bg-red-50 mb-4 px-4 py-3 text-[12px] text-red-600">
+          {loadError}
+        </div>
       )}
 
       {models && models.length === 0 && (
         <div className="card p-5 text-[13px] text-ink-muted">
           Belum ada model suara terpasang. Taruh foldernya di{" "}
-          <code className="mono">server/storage/models/&lt;id&gt;/</code> (cukup checkpoint{" "}
-          <code className="mono">*.pth</code>; katalog &amp; config diambil dari{" "}
-          <code className="mono">info.json</code> / <code className="mono">_default_config.json</code>) — lihat{" "}
+          <code className="mono">server/storage/models/&lt;id&gt;/</code> (cukup
+          checkpoint <code className="mono">*.pth</code>; katalog &amp; config
+          diambil dari <code className="mono">info.json</code> /{" "}
+          <code className="mono">_default_config.json</code>) — lihat{" "}
           <code className="mono">server/storage/models/README.md</code>.
         </div>
       )}
@@ -167,7 +170,9 @@ export default function VoiceStudio() {
                 alt=""
                 width={64}
                 height={64}
-                onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                onError={(e) =>
+                  ((e.target as HTMLImageElement).style.display = "none")
+                }
                 className="flex-shrink-0 rounded-[10px] object-cover"
               />
             )}
@@ -182,13 +187,16 @@ export default function VoiceStudio() {
               </div>
             </div>
             {selectedModel?.ready === false && (
-              <span className="flex-shrink-0 text-[11px] text-amber-600">belum siap</span>
+              <span className="flex-shrink-0 text-[11px] text-amber-600">
+                belum siap
+              </span>
             )}
           </div>
 
           {selectedModel?.ready === false && (
             <div className="text-xs text-red-600">
-              Model ini belum punya checkpoint lengkap (masih pointer Git LFS). Pilih karakter lain yang <em>siap</em>.
+              Model ini belum punya checkpoint lengkap (masih pointer Git LFS).
+              Pilih karakter lain yang <em>siap</em>.
             </div>
           )}
 
@@ -214,7 +222,9 @@ export default function VoiceStudio() {
 
           {selectedModel && selectedModel.speakers.length > 1 && (
             <div>
-              <label className="mb-1 block text-xs font-semibold text-ink-muted">Speaker</label>
+              <label className="mb-1 block text-xs font-semibold text-ink-muted">
+                Speaker
+              </label>
               <select
                 value={speakerId}
                 onChange={(e) => setSpeakerId(Number(e.target.value))}
@@ -231,7 +241,9 @@ export default function VoiceStudio() {
           )}
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-ink-muted">Teks</label>
+            <label className="mb-1 block text-xs font-semibold text-ink-muted">
+              Teks
+            </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -244,15 +256,27 @@ export default function VoiceStudio() {
           </div>
 
           <details>
-            <summary className="cursor-pointer text-xs text-ink-muted">Opsi lanjutan</summary>
+            <summary className="cursor-pointer text-xs text-ink-muted">
+              Opsi lanjutan
+            </summary>
             <div className="mt-2.5 grid grid-cols-3 gap-3">
               {[
                 { label: "Noise scale", value: noiseScale, set: setNoiseScale },
-                { label: "Noise scale W", value: noiseScaleW, set: setNoiseScaleW },
-                { label: "Length scale", value: lengthScale, set: setLengthScale },
+                {
+                  label: "Noise scale W",
+                  value: noiseScaleW,
+                  set: setNoiseScaleW,
+                },
+                {
+                  label: "Length scale",
+                  value: lengthScale,
+                  set: setLengthScale,
+                },
               ].map((f) => (
                 <div key={f.label}>
-                  <label className="mb-1 block text-[11px] text-ink-muted">{f.label}</label>
+                  <label className="mb-1 block text-[11px] text-ink-muted">
+                    {f.label}
+                  </label>
                   <input
                     type="number"
                     step={0.01}
@@ -274,7 +298,9 @@ export default function VoiceStudio() {
             {generating ? "Membuat suara…" : "Generate"}
           </button>
 
-          {genError && <div className="text-[13px] text-red-600">{genError}</div>}
+          {genError && (
+            <div className="text-[13px] text-red-600">{genError}</div>
+          )}
 
           {audioUrl && (
             <div className="border-t border-edge-soft pt-3.5">

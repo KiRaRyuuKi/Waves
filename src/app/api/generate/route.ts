@@ -1,6 +1,6 @@
 export async function POST(req: Request) {
   const body = await req.text();
-  const res = await fetch("http://localhost:8000/api/generate", {
+  const res = await fetch("http://localhost:9035/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,

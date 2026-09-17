@@ -16,7 +16,7 @@ export function isBackendDown(err: unknown): boolean {
 }
 
 export const BACKEND_DOWN_HINT =
-  'Backend belum dijalankan. Mulai dulu dengan `python -m uvicorn server.main:app --port 8000`, lalu muat ulang halaman ini. Panel di bawah dinonaktifkan sampai backend menyala.';
+  'Backend belum dijalankan. Mulai dulu dengan `python -m uvicorn server.main:app --port 9035`, lalu muat ulang halaman ini. Panel di bawah dinonaktifkan sampai backend menyala.';
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {

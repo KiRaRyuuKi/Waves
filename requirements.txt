@@ -2,6 +2,10 @@ fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
 
+# --- Media downloading (yt-dlp) ---
+# Dipanggil sebagai subprocess dari server/downloader.py.
+yt-dlp>=2026.8.19
+
 # --- Stem separation (Demucs) ---
 # Installed from the vendored copy in vendor/stem (see README) instead
 # of `git+https://...` so `pip install -r requirements.txt` never needs
@@ -30,3 +34,5 @@ pyopenjtalk>=0.3
 diffusers>=0.30
 safetensors>=0.4
 accelerate>=0.30
+pillow>=12.0
+soundfile>=0.14

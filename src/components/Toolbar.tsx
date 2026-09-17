@@ -23,7 +23,7 @@ export default function Toolbar({ fileName, showReset, onReset }: Props) {
 
       {showReset && (
         <div className=" flex min-w-80 items-center justify-end">
-          <button className="btn" onClick={onReset}>
+          <button className="btn w-40" onClick={onReset}>
             Track baru
           </button>
         </div>

@@ -47,8 +47,7 @@ export default function RootLayout({
                     </span>
                   </div>
                   <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-relaxed text-gray-500">
-                    Toolkit pemisahan instrumen musik berbasis Demucs,
-                    dengan backend FastAPI (Python) berbasis Next.js + TypeScript.
+                    Toolkit serba guna dengan backend FastAPI (Python) berbasis Next.js + TypeScript.
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
@@ -57,7 +56,7 @@ export default function RootLayout({
                     href="https://github.com/KiRaRyuuKi/Waves"
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-gradient-to-b from-[#2f3b46] to-[#1f2937] px-3 py-1.5 text-[13px] text-white no-underline transition-colors hover:from-[#2b2b2b] hover:to-black"
+                    className="inline-flex items-center w-40 gap-1.5 whitespace-nowrap rounded-md bg-gradient-to-b from-[#2f3b46] to-[#1f2937] px-3 py-1.5 text-[13px] text-white no-underline transition-colors hover:from-[#2b2b2b] hover:to-black"
                   >
                     <svg
                       width="16"
