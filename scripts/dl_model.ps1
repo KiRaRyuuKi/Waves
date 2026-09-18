@@ -1,15 +1,31 @@
 param(
   [Parameter(Mandatory=$true)]
   [string]$RepoId,
-  [string[]]$Exclude = @()
+  # Satu string, pola dipisah koma/titik-koma. (PowerShell -File tidak bisa
+  # mengikat parameter array, jadi jangan pakai [string[]] di sini.)
+  [string]$Exclude = "",
+  # Nama folder tujuan di server/storage/diffusers/. Default: segmen terakhir
+  # RepoId (mis. 'Lykon/DreamShaper' -> 'DreamShaper'). Override dipakai untuk
+  # nama folder yang konsisten di storage.
+  [string]$Folder = ""
 )
 
 $ErrorActionPreference = "Continue"
 
+# Saat stdout di-redirect (spawn dari backend), rendering progress bar
+# bawaan PS 5.x bikin Invoke-RestMethod sangat lambat seperti hang.
+$ProgressPreference = "SilentlyContinue"
+
+$excludePatterns = @()
+if ($Exclude) {
+  $excludePatterns = $Exclude -split '[,;]' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
+
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
 $modelName = ($RepoId -split "/")[-1]
-$root = Join-Path $projectRoot "server\storage\diffusers\$modelName"
+if (-not $Folder) { $Folder = $modelName }
+$root = Join-Path $projectRoot "server\storage\diffusers\$Folder"
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 
 $baseUrl = "https://huggingface.co/$RepoId/resolve/main"
@@ -17,29 +33,57 @@ $baseUrl = "https://huggingface.co/$RepoId/resolve/main"
 # --- Fetch file tree recursively via HuggingFace API ---
 $script:hfFiles = @()
 
+# Panggil API HF dengan retry + backoff (429 Too Many Requests umum
+# untuk unduhan publik). Berhenti coba setelah 10 attempt.
+function Get-HFJson([string]$url) {
+  $attempt = 0
+  while ($true) {
+    $attempt++
+    try {
+      return Invoke-RestMethod -Uri $url -TimeoutSec 30
+    } catch {
+      $msg = $_.Exception.Message
+      $is429 = $msg -match "429|Too Many Requests"
+      $retryAfter = $null
+      if ($_.Exception.Response) {
+        $retryAfter = $_.Exception.Response.Headers["Retry-After"]
+      }
+      Write-Output ("WAVES:LOG HF API error attempt {0}: {1}" -f $attempt, $msg)
+      if ($attempt -ge 10) { throw }
+      if ($is429 -and $retryAfter) { $wait = [math]::Min([int]$retryAfter + 1, 60) }
+      elseif ($is429) { $wait = [math]::Min(5 * $attempt, 60) }
+      else { $wait = 2 }
+      Start-Sleep -Seconds $wait
+    }
+  }
+}
+
 function Get-HFFiles([string]$apiPath) {
   $url = "https://huggingface.co/api/models/$RepoId/tree/main/$apiPath"
   try {
-    $resp = Invoke-RestMethod -Uri $url -TimeoutSec 30
+    $resp = Get-HFJson $url
   } catch {
     Write-Output ("WAVES:LOG Gagal mengambil daftar dari {0}: {1}" -f $apiPath, $_.Exception.Message)
     return
   }
   foreach ($item in $resp) {
+    # API tree HF mengembalikan field "path" (bukan "name").
+    $leaf = Split-Path $item.path -Leaf
     if ($item.type -eq "file" -and $item.size -gt 0) {
-      $rel = "$apiPath/$($item.name)".TrimStart("/")
+      $rel = $item.path
       $skip = $false
       # Di root repo, hanya ambil file konfigurasi; lewati checkpoint/ckpt-
       # safetensors raksasa & gambar yang biasanya cuma pelengkap di root.
-      if ($apiPath -eq "" -and $item.name -notlike "*.json") { $skip = $true }
-      foreach ($pat in $Exclude) {
-        if ($item.name -like $pat) { $skip = $true; break }
+      if ($apiPath -eq "" -and $leaf -notlike "*.json") { $skip = $true }
+      foreach ($pat in $excludePatterns) {
+        if ($leaf -like $pat) { $skip = $true; break }
       }
       if (-not $skip) {
         $script:hfFiles += @{ rel = $rel; size = [long]$item.size }
       }
     } elseif ($item.type -eq "directory") {
-      $sub = "$apiPath/$($item.name)".TrimStart("/")
+      $sub = $item.path
+      Start-Sleep -Milliseconds 400
       Get-HFFiles $sub
     }
   }
@@ -83,28 +127,24 @@ function Invoke-ChunkedDownload($fileDef) {
   New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
 
   $attempts = 0
-  while ($true) {
-    $cur = Get-Len $out
-    $doneTotal = Get-CurBytes
-    Write-Output ("WAVES:PROGRESS {0} {1}" -f $doneTotal, $KNOWN_TOTAL)
-
-    if ($cur -ge $size) { break }
-
-    curl.exe --show-error -L -C - --retry 999 --retry-delay 5 --max-time 8 -o $out "$baseUrl/$($fileDef.rel)"
-    if ($LASTEXITCODE -ne 0) {
-      $attempts++
-      if ($attempts -gt 500) {
-        Write-Output ("WAVES:ERROR Terlalu banyak percobaan untuk {0}" -f $fileDef.rel)
-        return
+    # Update total progress tiap detik supaya UI live
+    $lastUpdate = 0
+    while ($true) {
+      $cur = Get-Len $out
+      if ($cur -ge $size) { break }
+      
+      # Report progres tiap ~1 detik
+      if ((Get-Date).AddMilliseconds(-1000) -ge $lastUpdate) {
+         $doneTotal = Get-CurBytes
+         Write-Output ("WAVES:PROGRESS {0} {1}" -f $doneTotal, $KNOWN_TOTAL)
+         $lastUpdate = Get-Date
       }
-      Start-Sleep -Seconds 2
-      continue
-    }
 
-    if ((Get-Len $out) -ge $size) { break }
-    $attempts++
-    Start-Sleep -Seconds 1
-  }
+      curl.exe --no-progress-meter --show-error -L -C - --retry 999 --retry-delay 5 --retry-all-errors --speed-time 60 --speed-limit 1024 -o $out "$baseUrl/$($fileDef.rel)"
+      if ($LASTEXITCODE -eq 0) { break }
+      
+      Start-Sleep -Seconds 2
+    }
   Write-Output ("WAVES:LOG selesai: {0}" -f $fileDef.rel)
 }
 

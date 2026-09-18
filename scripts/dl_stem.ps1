@@ -51,12 +51,14 @@ function Get-DoneTotal {
   return $done
 }
 
-# ---------- Unduh satu checkpoint (resume + chunk ~30 detik untuk progres) ----------
+# ---------- Unduh satu checkpoint (resume + chunk pendek agar progres live) ----------
 function Invoke-CheckpointDownload($def) {
   $out = Join-Path $cacheDir $def.name
   $size = [long]$def.size
 
   $attempts = 0
+  $lastUpdate = 0
+  $nextRun = Get-Date
   while ($true) {
     $cur = Get-Len $out
     if ($cur -ge $size) {
@@ -64,37 +66,46 @@ function Invoke-CheckpointDownload($def) {
       return
     }
 
-    # "-C -" => lanjut dari byte yang belum ada
-    curl.exe --show-error -L -C - --retry 999 --retry-delay 5 --max-time 30 -o $out "$baseUrl/$($def.url)"
-    $cur = Get-Len $out
-
-    $done = Get-DoneTotal
-    Write-Output ("WAVES:PROGRESS {0} {1}" -f $done, $knownTotal)
-
-    if ($cur -ge $size) {
-      Write-Output ("WAVES:LOG selesai {0}" -f $def.name)
-      return
+    # Report progres tiap ~1 detik supaya UI live (bar naik terus).
+    if ((Get-Date).AddMilliseconds(-1000) -ge $lastUpdate) {
+      $done = Get-DoneTotal
+      Write-Output ("WAVES:PROGRESS {0} {1}" -f $done, $knownTotal)
+      $lastUpdate = Get-Date
     }
-    if ($attempts++ -gt 500) {
+
+    # Unduh dalam chunk pendek (~5 detik) + resume, supaya progres bisa
+    # dilaporkan di antara chunk, bukan baru setelah file penuh.
+    if ((Get-Date) -ge $nextRun) {
+      $nextRun = (Get-Date).AddMilliseconds(5500)
+      curl.exe --no-progress-meter --show-error -L -C - --max-time 5 -o $out "$baseUrl/$($def.url)"
+    }
+
+    if ((Get-Date).AddMilliseconds(-1000) -ge $lastUpdate) {
+      $done = Get-DoneTotal
+      Write-Output ("WAVES:PROGRESS {0} {1}" -f $done, $knownTotal)
+      $lastUpdate = Get-Date
+    }
+
+    if ($attempts++ -gt 2000) {
       Write-Output ("WAVES:ERROR Terlalu banyak percobaan untuk {0}" -f $def.name)
       return
     }
-    Start-Sleep -Seconds 2
+    Start-Sleep -Milliseconds 200
   }
 }
 
 # ---------- Proses ----------
-Write-Output ("WAVES:STAGE Mengunduh bobot Demucs ({0})…" -f $Model)
+Write-Output ("WAVES:STAGE Mengunduh bobot Demucs ({0})..." -f $Model)
 foreach ($j in $jobs) {
   Invoke-CheckpointDownload $j
 }
 
-Write-Output "WAVES:STAGE Verifikasi file…"
+Write-Output "WAVES:STAGE Verifikasi file..."
 $missing = @($jobs | Where-Object { (Get-Len (Join-Path $cacheDir $_.name)) -lt [long]$_.size })
 if ($missing.Count -gt 0) {
   Write-Output ("WAVES:ERROR File belum lengkap: {0}" -f (($missing | ForEach-Object { $_.name }) -join ", "))
   exit 1
 }
 
-Write-Output ("WAVES:STAGE Selesai — bobot {0} siap dipakai." -f $Model)
+Write-Output ("WAVES:STAGE Selesai - bobot {0} siap dipakai." -f $Model)
 Write-Output "WAVES:DONE"

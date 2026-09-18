@@ -1,5 +1,5 @@
 export type SetupTaskStatus = "not_installed" | "installed" | "partial";
-export type SetupTaskCategory = "runtime" | "model";
+export type SetupTaskCategory = "runtime" | "model" | "stem";
 export type SetupJobStatus = "queued" | "running" | "done" | "error";
 
 export interface SetupTask {
@@ -11,6 +11,8 @@ export interface SetupTask {
   total_bytes: number;
   installed: boolean;
   status: SetupTaskStatus;
+  percent: number;
+  done_bytes: number;
   python_path?: string;
 }
 
@@ -67,6 +69,12 @@ export async function fetchSetupTasks(): Promise<SetupTask[]> {
   return data.tasks ?? [];
 }
 
+export async function fetchSetupJobs(): Promise<SetupJob[]> {
+  const res = await tryFetch("/api/setup/jobs");
+  const data = await json<{ jobs: SetupJob[] }>(res);
+  return data.jobs ?? [];
+}
+
 export async function fetchSetupPythons(): Promise<SetupPython[]> {
   const res = await tryFetch("/api/setup/pythons");
   const data = await json<{ pythons: SetupPython[] }>(res);
@@ -86,6 +94,13 @@ export async function startSetupJob(
     { method: "POST" }
   );
   return json<{ job_id: string }>(res);
+}
+
+export async function deleteTask(taskId: string): Promise<{ status: string }> {
+  const res = await tryFetch(`/api/setup/tasks/${encodeURIComponent(taskId)}`, {
+    method: "DELETE",
+  });
+  return json<{ status: string }>(res);
 }
 
 export async function getSetupJob(jobId: string): Promise<SetupJob> {

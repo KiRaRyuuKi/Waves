@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -24,8 +25,8 @@ SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 TORCH_DIR = PROJECT_ROOT / "server" / "storage" / "torch"   # wheel torch+torchaudio (bersarang dalam whls/)
 TINYSD_DIR = PROJECT_ROOT / "server" / "storage" / "diffusers" / "tiny-sd"
 DIFFUSERS_DIR = PROJECT_ROOT / "server" / "storage" / "diffusers"
-SD15_DIR = DIFFUSERS_DIR / "stable-diffusion-v1-5"
-DREAMSHAPER_DIR = DIFFUSERS_DIR / "DreamShaper"
+SD15_DIR = DIFFUSERS_DIR / "stable-diffusion"
+DREAMSHAPER_DIR = DIFFUSERS_DIR / "dream-shaper"
 
 # Cache bobot Demucs (dibaca oleh torch.hub → separator.py). Disamakan
 # dengan folder default torch hub di platform ini.
@@ -153,11 +154,13 @@ def _task_state(task_id: str) -> dict:
                 "total_bytes": total,
                 "percent": 100.0,
             }
+        known = task.get("total_bytes", 0)
+        percent = round(100.0 * total / known, 1) if known else 0.0
         return {
             "installed": False,
-            "done_bytes": 0,
+            "done_bytes": total,
             "total_bytes": known,
-            "percent": 0.0,
+            "percent": min(percent, 99.0) if total > 0 else 0.0,
         }
 
     done = _dir_bytes(check_dir, bigs)
@@ -193,7 +196,11 @@ TASKS = [
         "info": "Model paling populer di komunitas. Hasil bagus dan "
         "kompatibel dengan LoRA & ControlNet.",
         "script": "dl_model.ps1",
-        "script_args": ["-RepoId", "runwayml/stable-diffusion-v1-5"],
+        "script_args": [
+            "-RepoId", "runwayml/stable-diffusion-v1-5",
+            "-Folder", "stable-diffusion",
+            "-Exclude", "*.bin,*.fp16.safetensors,*.non_ema.safetensors",
+        ],
         "category": "model",
         "total_bytes": SD15_TOTAL,
         "check_dir": SD15_DIR,
@@ -207,7 +214,7 @@ TASKS = [
         "info": "Versi lebih detail dari SD 1.5. Unggul untuk ilustrasi, "
         "konsep art, dan fantasy.",
         "script": "dl_model.ps1",
-        "script_args": ["-RepoId", "Lykon/DreamShaper"],
+        "script_args": ["-RepoId", "Lykon/DreamShaper", "-Folder", "dream-shaper"],
         "category": "model",
         "total_bytes": DREAMSHAPER_TOTAL,
         "check_dir": DREAMSHAPER_DIR,
@@ -365,6 +372,17 @@ async def list_pythons():
 #  Job runner (thread + subprocess, SSE)
 # =====================================================================
 
+# Log unduhan + berkas jejak job (supaya job bisa dipulihkan saat
+# backend restart — proses unduhan yang masih hidup tetap terpantau).
+WAVES_DIR = PROJECT_ROOT / ".waves"
+WAVES_LOG_DIR = WAVES_DIR / "logs"
+JOBS_FILE = WAVES_DIR / "jobs.json"
+
+
+def _download_log(job_id: str) -> Path:
+    return WAVES_LOG_DIR / f"download-{job_id}.log"
+
+
 @dataclass
 class SetupJob:
     id: str
@@ -384,6 +402,202 @@ class SetupJob:
     _bytes_at_event: int = 0
     _rate: float = 0.0
     _finished: bool = False
+    _proc: Optional[subprocess.Popen] = None
+    _stopped: bool = False
+    _pid: int = 0                 # PID powershell/job (untuk deteksi yatim & taskkill)
+    _monitor: bool = False        # True bila job dipulihkan (hanya bisa dipantau via PID+disk)
+
+
+# --- persistensi jejak job (.waves/jobs.json) ---
+
+def _load_jobs_file() -> list[dict]:
+    try:
+        if JOBS_FILE.is_file():
+            data = json.loads(JOBS_FILE.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+    except (OSError, ValueError):
+        pass
+    return []
+
+
+def _save_jobs_file(entries: list[dict]) -> None:
+    try:
+        WAVES_DIR.mkdir(parents=True, exist_ok=True)
+        JOBS_FILE.write_text(json.dumps(entries), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _persist_job(job: SetupJob) -> None:
+    entries = _load_jobs_file()
+    entries = [e for e in entries if e.get("id") != job.id]
+    entries.append({
+        "id": job.id,
+        "task_id": job.task_id,
+        "pid": job._pid,
+        "created_at": job.created_at,
+    })
+    _save_jobs_file(entries)
+
+
+def _unpersist_job(job_id: str) -> None:
+    entries = [e for e in _load_jobs_file() if e.get("id") != job_id]
+    _save_jobs_file(entries)
+
+
+def _persist_waves(job: SetupJob, line: str) -> None:
+    """Simpan baris protokol WAVES ke log permanen taska untuk pemulihan."""
+    try:
+        WAVES_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(_download_log(job.id), "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+        )
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    except Exception:
+        try:
+            r = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=5,
+            )
+            return f"\"{pid}\"" in r.stdout
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+
+def _kill_tree(pid: int) -> None:
+    """Bunuh proces beserta seluruh anaknya (powershell + curl)."""
+    if pid <= 0:
+        return
+    try:
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            capture_output=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _prime_job_from_log(job: SetupJob) -> None:
+    """Saat memulihkan job, isi stage/log/progress dari log permanen."""
+    try:
+        lines = _download_log(job.id).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    for line in lines:
+        if line.startswith("WAVES:"):
+            payload = line[6:]
+            key, _, value = payload.partition(" ")
+            if key == "STAGE":
+                job.stage = value.strip()
+            elif key == "PROGRESS":
+                parts = value.split()
+                if len(parts) == 2:
+                    try:
+                        job.done_bytes = int(float(parts[0]))
+                        job.total_bytes = int(float(parts[1])) or job.total_bytes
+                    except ValueError:
+                        pass
+            elif key == "LOG":
+                job.log.append(value.strip())
+            elif key == "ERROR":
+                job.error = value.strip()
+    if job.total_bytes > 0:
+        job.progress = round(100.0 * job.done_bytes / job.total_bytes, 1)
+    job.log = job.log[-200:]
+
+
+def _monitor_orphan(job: SetupJob) -> None:
+    """Pantau job yang dipulihkan: progress dihitung dari disk; saat PID
+    mati, job dianggap selesai/dijeda."""
+    last = 0.0
+    last_done = job.done_bytes
+    while _pid_alive(job._pid):
+        time.sleep(1)
+        if job._finished:
+            return
+        try:
+            st = _task_state(job.task_id)
+        except HTTPException:
+            break
+        with store._lock:
+            now = time.time()
+            total = st["total_bytes"] or job.total_bytes
+            done = min(st["done_bytes"], total)
+            if last and now > last:
+                inst = (done - last_done) / (now - last)
+                if inst > 0:
+                    job._rate = inst if job._rate <= 0 else job._rate * 0.6 + inst * 0.4
+            last, last_done = now, done
+            job.done_bytes = done
+            job.total_bytes = total
+            if total > 0:
+                job.progress = round(100.0 * done / total, 1)
+                if job.progress >= 100.0:
+                    job.progress = 99.0   # tunggu DONE / PID mati
+            if job._rate >= 1024:
+                job.eta_seconds = max(total - done, 0) / job._rate
+            else:
+                job.eta_seconds = None
+    with store._lock:
+        if job._finished:
+            return
+        job._finished = True
+        job.status = "error" if job._stopped else "done"
+        if job._stopped:
+            job.error = "Dijeda pengguna"
+            job.progress = min(job.progress, 99.0)
+        else:
+            job.progress = 100.0
+            job.error = None
+    _unpersist_job(job.id)
+
+
+def _restore_jobs() -> None:
+    """Panggil saat server start: pulihkan unduhan yang masih hidup dari
+    sesi sebelumnya supaya UI tetap menampilkan + tidak dobel spawn."""
+    global _job_counter
+    max_counter = _job_counter
+    for e in _load_jobs_file():
+        jid = e.get("id") or ""
+        m = re.fullmatch(r"setup-(\d+)", jid)
+        if m:
+            max_counter = max(max_counter, int(m.group(1)))
+        pid = int(e.get("pid") or 0)
+        if not pid or not _pid_alive(pid):
+            continue
+        task = next((t for t in TASKS if t["id"] == e.get("task_id")), None)
+        if task is None:
+            continue
+        job = SetupJob(
+            id=jid,
+            task_id=task["id"],
+            task_name=task["name"],
+            total_bytes=task.get("total_bytes", 0),
+        )
+        job.status = "running"
+        job.stage = "Mengunduh — dipulihkan"
+        job._pid = pid
+        job._monitor = True
+        _prime_job_from_log(job)
+        store.create(job)
+        threading.Thread(target=_monitor_orphan, args=(job,), daemon=True).start()
+        job.log.append("(backend dimulai ulang — pantauan dipulihkan dari sesi sebelumnya)")
+    _job_counter = max_counter
 
 
 class SetupJobStore:
@@ -398,6 +612,19 @@ class SetupJobStore:
     def get(self, job_id: str) -> Optional[SetupJob]:
         with self._lock:
             return self._jobs.get(job_id)
+
+    def active_for_task(self, task_id: str) -> Optional[SetupJob]:
+        """Job yang masih berjalan untuk task ini (biar klik ulang tidak
+        men-spawn proses unduh kedua ke folder yang sama)."""
+        with self._lock:
+            for job in self._jobs.values():
+                if job.task_id == task_id and not job._finished:
+                    return job
+            return None
+
+    def all(self) -> list["SetupJob"]:
+        with self._lock:
+            return list(self._jobs.values())
 
     def update(self, job_id: str, **fields) -> None:
         with self._lock:
@@ -447,12 +674,19 @@ def _run_script(job: SetupJob, script: Path, args: list[str]) -> None:
         cwd=str(PROJECT_ROOT),
     )
 
+    with store._lock:
+        job.status = "running"
+        job._pid = handle.pid
+        job._proc = handle
+    _persist_job(job)
+
     last_progress = 0.0
     for raw in handle.stdout:
         line = raw.rstrip("\r\n")
         if not line:
             continue
         if line.startswith("WAVES:"):
+            _persist_waves(job, line)
             _handle_waves(job, line[6:])
         else:
             # output bebas (curl dll) — jadikan log, tapi jangan spam.
@@ -466,7 +700,8 @@ def _run_script(job: SetupJob, script: Path, args: list[str]) -> None:
             job.progress = 100.0 if rc == 0 else job.progress
             job._finished = True
             if rc != 0 and not job.error:
-                job.error = f"Proses keluar dengan kode {rc}"
+                job.error = "Dijeda pengguna" if job._stopped else f"Proses keluar dengan kode {rc}"
+    _unpersist_job(job.id)
 
 
 def _handle_waves(job: SetupJob, payload: str) -> None:
@@ -490,7 +725,10 @@ def _handle_waves(job: SetupJob, payload: str) -> None:
                 # hitung laju byte (sliding) → ETA
                 dt = now - job._done_at_event
                 if dt > 0:
-                    job._rate = (done - job._bytes_at_event) / dt
+                    inst = (done - job._bytes_at_event) / dt
+                    if inst > 0:
+                        # haluskan supaya ETA tidak melompat-lompat
+                        job._rate = inst if job._rate <= 0 else job._rate * 0.6 + inst * 0.4
                 job._bytes_at_event = done
                 job._done_at_event = now
                 job.done_bytes = min(done, total)
@@ -499,9 +737,15 @@ def _handle_waves(job: SetupJob, payload: str) -> None:
                     job.progress = round(100.0 * job.done_bytes / total, 1)
                     if job.done_bytes >= total:
                         job.progress = 99.0   # tunggu DONE utk 100
-                if job._rate > 0:
+                # ETA hanya masuk akal kalau laju >= 1 KB/s; selain itu jangan
+                # tampilkan angka raksasa (mis. saat koneksi macet).
+                if job.done_bytes >= total:
+                    job.eta_seconds = 0.0
+                elif job._rate >= 1024:
                     remain = max(total - job.done_bytes, 0)
                     job.eta_seconds = remain / job._rate
+                else:
+                    job.eta_seconds = None
         elif key == "ERROR":
             job.status = "error"
             job.error = value
@@ -545,6 +789,12 @@ async def run_task(
     if task is None:
         raise HTTPException(404, "Task tidak dikenal")
 
+    # Kalau task ini sedang berjalan, kembalikan job yang ada — jangan
+    # spawn proses kedua yang berebut folder & memperlambat unduhan.
+    existing = store.active_for_task(task_id)
+    if existing is not None:
+        return {"job_id": existing.id, "task_id": task_id}
+
     script = _script_for(task_id)
     args: list[str] = task.get("script_args", []).copy()
     if task.get("needs_python"):
@@ -578,7 +828,20 @@ async def run_task(
 
 def _event_payload(job: SetupJob, interpolate: bool = True) -> dict:
     with store._lock:
-        snap = asdict(job)
+        snap = {
+            "id": job.id,
+            "task_id": job.task_id,
+            "task_name": job.task_name,
+            "status": job.status,
+            "stage": job.stage,
+            "progress": job.progress,
+            "done_bytes": job.done_bytes,
+            "total_bytes": job.total_bytes,
+            "eta_seconds": job.eta_seconds,
+            "error": job.error,
+            "log": list(job.log),
+            "created_at": job.created_at,
+        }
         rate = job._rate
         done = job.done_bytes
         total = job.total_bytes
@@ -600,11 +863,9 @@ def _event_payload(job: SetupJob, interpolate: bool = True) -> dict:
             snap["progress"] = progress
             snap["eta_seconds"] = eta
 
-    snap.pop("_done_at_event", None)
-    snap.pop("_bytes_at_event", None)
-    snap.pop("_rate", None)
-    snap.pop("_finished", None)
-    snap.pop("_thread", None)
+    # field yang dipakai frontend
+    snap["job_id"] = job.id
+    snap["rate_bps"] = rate if rate > 0 else None
     return snap
 
 
@@ -620,6 +881,14 @@ async def _sse_stream(job_id: str):
         if job.status in ("done", "error"):
             break
         await asyncio.sleep(0.5)
+
+
+@router.get("/jobs")
+async def list_jobs():
+    """Semua job setup (dipakai UI untuk melanjutkan pantauan setelah
+    modal dibuka ulang / halaman di-refresh — job hidup di memori)."""
+    jobs = store.all()
+    return {"jobs": [_event_payload(j, interpolate=False) for j in jobs]}
 
 
 @router.get("/jobs/{job_id}")
@@ -644,3 +913,69 @@ async def stream_job(job_id: str):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/jobs/{job_id}/stop")
+async def stop_job(job_id: str):
+    """Hentikan proses unduh job tanpa merusak file yang sudah terunduh."""
+    job = store.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job tidak ditemukan")
+    proc = job._proc
+    if proc is not None and proc.poll() is None:
+        with store._lock:
+            job._stopped = True
+        _kill_tree(proc.pid)   # bunuh powershell + curl anaknya
+    elif job._pid and _pid_alive(job._pid):
+        # job dipulihkan (backend sempat restart) — bunuh via PID.
+        with store._lock:
+            job._stopped = True
+        _kill_tree(job._pid)
+    else:
+        with store._lock:
+            job._stopped = True
+    return {"job_id": job_id, "status": "stopped"}
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(task_id: str):
+    """Hapus model gambar dari disk (khusus kategori 'model').
+
+    Proses yang masih hidup (aktif) untuk task ini diterminasi dulu,
+    lalu folder tujuan (check_dir) dihapus beserta isinya.
+    """
+    task = next((t for t in TASKS if t["id"] == task_id), None)
+    if task is None:
+        raise HTTPException(404, "Task tidak dikenal")
+    if task.get("category") != "model":
+        raise HTTPException(400, "Hanya model gambar yang bisa dihapus dari sini")
+
+    target = task.get("check_dir")
+    if target is None or not target.is_dir():
+        return {"task_id": task_id, "status": "noop", "deleted_bytes": 0}
+
+    # Hentikan job aktif untuk task ini supaya tidak menulis ke folder
+    # yang sedang dihapus.
+    active = store.active_for_task(task_id)
+    if active is not None:
+        proc = active._proc
+        if proc is not None and proc.poll() is None:
+            with store._lock:
+                active._stopped = True
+            _kill_tree(proc.pid)
+        elif active._pid and _pid_alive(active._pid):
+            with store._lock:
+                active._stopped = True
+            _kill_tree(active._pid)
+
+    deleted_bytes = sum(
+        f.stat().st_size for f in target.rglob("*") if f.is_file()
+    )
+    shutil.rmtree(target, ignore_errors=True)
+    return {"task_id": task_id, "status": "deleted", "deleted_bytes": deleted_bytes}
+
+
+# Pulihkan unduhan yang masih jalan dari sesi sebelumnya (backend sempat
+# restart) supaya UI tetap tahu dan tidak ada spawn ganda.
+_restore_jobs()
+

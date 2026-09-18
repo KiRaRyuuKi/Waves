@@ -15,7 +15,7 @@ interface ServerState {
 export default function ServerControl() {
   const [state, setState] = useState<ServerState>({ running: false });
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState<"" | "restart" | "stop">("");
+  const [busy, setBusy] = useState<"" | "start" | "restart" | "stop">("");
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -42,7 +42,8 @@ export default function ServerControl() {
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      if (rootRef.current && !rootRef.current.contains(e.target as Node))
+        setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -55,12 +56,15 @@ export default function ServerControl() {
     };
   }, [open]);
 
-  async function act(action: "restart" | "stop") {
+  async function act(action: "start" | "restart" | "stop") {
     setBusy(action);
     try {
-      await fetch(`/api/control/${action}`, { method: "POST" });
+      await fetch(`/api/control/${action === "start" ? "restart" : action}`, { method: "POST" });
       if (action === "stop") setOpen(false);
-      setTimeout(() => setState((s) => ({ ...s, running: action === "restart" })), 1000);
+      setTimeout(
+        () => setState((s) => ({ ...s, running: action !== "stop" })),
+        1000,
+      );
     } catch {
       setOpen(false);
     } finally {
@@ -75,8 +79,12 @@ export default function ServerControl() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title={state.running ? "Server berjalan — klik untuk menu" : "Server belum berjalan"}
-        className={`relative flex h-[34px] w-[34px] items-center justify-center rounded-md border transition-colors ${
+        title={
+          state.running
+            ? "Server berjalan — klik untuk menu"
+            : "Server belum berjalan"
+        }
+        className={`relative flex h-[38px] w-[38px] items-center justify-center rounded-md border transition-colors ${
           state.running
             ? "border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"
             : "border-edge bg-white text-ink-subtle hover:bg-canvas-subtle"
@@ -96,9 +104,9 @@ export default function ServerControl() {
           <path d="M12 2v9" />
           <path d="M18.36 6.64a9 9 0 1 1-12.72 0" />
         </svg>
-        {state.running && (
-          <span className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${state.running ? "bg-green-500" : "bg-red-500"}`} />
-        )}
+        <span
+          className={`absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full ${state.running ? "bg-red-500" : "bg-gray-500"}`}
+        />
       </button>
 
       {open && (
@@ -110,7 +118,9 @@ export default function ServerControl() {
             {state.running ? (
               <>
                 Server berjalan ·{" "}
-                <span className="font-medium text-green-700">{state.mode === "start" ? "Production" : "Development"}</span>
+                <span className="font-medium text-red-700">
+                  {state.mode === "start" ? "Production" : "Development"}
+                </span>
               </>
             ) : (
               <>Server tidak berjalan</>
@@ -120,16 +130,33 @@ export default function ServerControl() {
           <button
             type="button"
             role="menuitem"
-            disabled={!state.running || busy !== ""}
-            onClick={() => act("restart")}
+            disabled={busy !== ""}
+            onClick={() => act(state.running ? "restart" : "start")}
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] text-ink transition-colors hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
             </svg>
-            <span className="flex-1">Restart Server</span>
-            {busy === "restart" && <span className="text-[11px] text-ink-muted">…</span>}
+            <span className="flex-1">
+              {state.running ? "Restart Server" : "Start Server"}
+            </span>
+            {busy === "restart" && (
+              <span className="text-[11px] text-ink-muted">…</span>
+            )}
+            {busy === "start" && (
+              <span className="text-[11px] text-ink-muted">…</span>
+            )}
           </button>
           <div className="mx-2 my-0.5" />
           <button
@@ -139,15 +166,28 @@ export default function ServerControl() {
             onClick={() => act("stop")}
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
             <span className="flex-1">Close Server</span>
-            {busy === "stop" && <span className="text-[11px] text-red-400">…</span>}
+            {busy === "stop" && (
+              <span className="text-[11px] text-red-400">…</span>
+            )}
           </button>
           <div className="mx-2 my-0.5 border-t border-edge" />
           <div className="px-2.5 py-1.5 text-[10px] leading-relaxed text-ink-muted">
-            Restart mengaktifkan ulang backend saja. Close menghentikan backend &amp; frontend.
+            Start/restart mengaktifkan ulang backend (dan frontend bila belum
+            jalan). Close menghentikan backend &amp; frontend.
           </div>
         </div>
       )}

@@ -116,7 +116,7 @@ if ($Install) {
 
   foreach ($t in $targets) {
     $envName = if ($t -eq $venvPy) { "venv proyek" } else { $t }
-    Write-Output ("WAVES:STAGE Memasang torch ke {0}…" -f $envName)
+    Write-Output ("WAVES:STAGE Memasang torch ke {0}..." -f $envName)
     & $t -m pip install --upgrade --no-cache-dir @wheels 2>&1
     if ($LASTEXITCODE -ne 0) {
       Write-Output ("WAVES:ERROR pip install gagal di {0} (exit {1})" -f $envName, $LASTEXITCODE)

@@ -351,6 +351,16 @@ function spawnBackground(cmd, args, logFile) {
   return child;
 }
 
+// python.exe selalu subsystem console (bisa kelihatan sebagai jendela baru
+// tergantung terminal host-nya). pythonw.exe adalah build Windows yang
+// memang tidak pernah punya console sama sekali — dipakai khusus untuk
+// proses backend yang di-spawn di background.
+function toPythonw(pyPath) {
+  if (!IS_WIN) return pyPath;
+  const w = pyPath.replace(/python\.exe$/i, "pythonw.exe");
+  return existsSync(w) ? w : pyPath;
+}
+
 function openBrowser() {
   if (NO_BROWSER) return;
   try {
@@ -535,7 +545,7 @@ async function main() {
   // ---- backend ----
   INFO(`Memulai backend (uvicorn) di ${BE_URL}…`);
   const backend = spawnBackground(
-    py,
+    toPythonw(py),
     [
       "-m",
       "uvicorn",

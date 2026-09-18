@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import net from "node:net";
 import path from "node:path";
 import { platform } from "node:os";
 
@@ -22,7 +23,19 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-export interface ServerState {
+function portOpen(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = new net.Socket();
+    sock.setTimeout(800);
+    sock
+      .once("connect", () => { sock.destroy(); resolve(true); })
+      .once("error", () => { sock.destroy(); resolve(false); })
+      .once("timeout", () => { sock.destroy(); resolve(false); })
+      .connect(port, "127.0.0.1");
+  });
+}
+
+interface ServerState {
   running: boolean;
   mode?: string;
   backendPid?: number;
@@ -32,7 +45,7 @@ export interface ServerState {
   startedAt?: string;
 }
 
-export function readServerState(): ServerState {
+async function readServerState(): Promise<ServerState> {
   const stateFile = path.resolve(process.cwd(), ".waves", "state.json");
   try {
     const raw = JSON.parse(readFileSync(stateFile, "utf8"));
@@ -48,12 +61,23 @@ export function readServerState(): ServerState {
       startedAt: raw.startedAt,
     };
   } catch {
+    // state.json tidak ada — deteksi langsung apakah port backend/frontend aktif
+    const [bePort, fePort] = await Promise.all([portOpen(9035), portOpen(3095)]);
+    if (bePort || fePort) {
+      return {
+        running: true,
+        mode: undefined,
+        backendPort: bePort ? "9035" : undefined,
+        frontendPort: fePort ? "3095" : undefined,
+      };
+    }
     return { running: false };
   }
 }
 
 export async function GET() {
-  return Response.json(readServerState(), {
+  const state = await readServerState();
+  return Response.json(state, {
     headers: { "Cache-Control": "no-store" },
   });
 }
