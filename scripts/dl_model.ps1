@@ -4,10 +4,18 @@ param(
   # Satu string, pola dipisah koma/titik-koma. (PowerShell -File tidak bisa
   # mengikat parameter array, jadi jangan pakai [string[]] di sini.)
   [string]$Exclude = "",
-  # Nama folder tujuan di server/storage/diffusers/. Default: segmen terakhir
-  # RepoId (mis. 'Lykon/DreamShaper' -> 'DreamShaper'). Override dipakai untuk
-  # nama folder yang konsisten di storage.
-  [string]$Folder = ""
+  # Nama folder tujuan di server/storage/<Base>/<Folder>/. Default: segmen
+  # terakhir RepoId (mis. 'Lykon/DreamShaper' -> 'DreamShaper'). Override
+  # dipakai untuk nama folder yang konsisten di storage.
+  [string]$Folder = "",
+  # Root tujuan relatif project root (mis. 'server\storage\generate\video'). Default
+  # 'server\storage\generate\image' (model gambar). Dipakai task model video agar
+  # terunduh ke storage/generate/video/ tanpa mengotori folder image SD.
+  [string]$Base = "server\storage\generate\image",
+  # Ikut sertakan file BUKAN .json di root repo (mis. checkpoint .safetensors
+  # yang persis di root, khas repo transformers/CLIP & motion module).
+  # Default false: hanya file .json di root yang diambil (layout diffusers).
+  [switch]$KeepRoot
 )
 
 $ErrorActionPreference = "Continue"
@@ -25,7 +33,7 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
 $modelName = ($RepoId -split "/")[-1]
 if (-not $Folder) { $Folder = $modelName }
-$root = Join-Path $projectRoot "server\storage\diffusers\$Folder"
+$root = Join-Path $projectRoot (Join-Path $Base $Folder)
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 
 $baseUrl = "https://huggingface.co/$RepoId/resolve/main"
@@ -74,7 +82,9 @@ function Get-HFFiles([string]$apiPath) {
       $skip = $false
       # Di root repo, hanya ambil file konfigurasi; lewati checkpoint/ckpt-
       # safetensors raksasa & gambar yang biasanya cuma pelengkap di root.
-      if ($apiPath -eq "" -and $leaf -notlike "*.json") { $skip = $true }
+      # (kecuali -KeepRoot disertakan — task yang butuh file non-json di root,
+      # seperti motion module AnimateDiff & CLIP vision, memakainya.)
+      if ($apiPath -eq "" -and $leaf -notlike "*.json" -and -not $KeepRoot) { $skip = $true }
       foreach ($pat in $excludePatterns) {
         if ($leaf -like $pat) { $skip = $true; break }
       }

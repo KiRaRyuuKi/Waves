@@ -48,7 +48,10 @@ export default function ImageStudio() {
 
   const selectedModel = models?.find((m) => m.id === modelId) ?? null;
   const noModels = models !== null && models.length === 0;
-  const controlsDisabled = backendDown || noModels;
+  const notInstalled = noModels;
+  // Dropdown tetap aktif biar bisa dipilih dan lihat keterangan — hanya backendDown yang disable dropdown
+  const controlsDisabled = backendDown;
+  const generateDisabled = backendDown || noModels || !modelId || !prompt.trim() || (mode === "img2img" && !initFile);
 
   const modelOptions: DropdownOption[] = useMemo(
     () =>
@@ -64,7 +67,11 @@ export default function ImageStudio() {
             onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
             className="flex-shrink-0 rounded-[5px] object-cover"
           />
-        ) : undefined,
+        ) : (
+          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[5px] bg-canvas-subtle text-[11px] font-medium">
+            {m.name.trim().charAt(0).toUpperCase() || "•"}
+          </span>
+        ),
         right: m.description ? (
           <span className="max-w-40 flex-shrink-0 truncate text-[11px] text-ink-muted">
             {m.description}
@@ -129,24 +136,24 @@ export default function ImageStudio() {
     <main className="w-full pb-12">
       <div className="mb-1 text-sm font-semibold">Image Generation</div>
       <div className="mb-4 text-xs text-ink-muted">
-        Generate gambar dengan Stable Diffusion. Pilih model, masukkan prompt, dan klik Generate.
+        Generate gambar dengan Stable Diffusion. Pilih model, masukkan prompt,
+        dan klik Generate.
       </div>
 
       {loadError && (
-        <div className="card mb-4 p-4 text-[13px] text-red-600">
+        <div className="rounded-md border border-edge bg-red-50 mb-4 px-4 py-3 text-[12px] text-red-600">
           {loadError}
         </div>
       )}
 
       {models && models.length === 0 && (
         <div className="card p-5 mb-5 text-[13px] text-ink-muted">
-          Belum ada model terpasang. Taruh checkpoint Stable Diffusion di{" "}
-          <code className="mono">server/storage/diffusers/&lt;id&gt;/</code> —
-          bisa folder <em>diffusers</em> lengkap (
-          <code className="mono">model_index.json</code>) atau satu file{" "}
-          <code className="mono">*.safetensors</code>/
-          <code className="mono">*.ckpt</code>. Lihat{" "}
-          <code className="mono">server/storage/diffusers/README.md</code>.
+          Belum ada model terpasang. Pasang lewat <code className="mono">Setup &amp; Runtime</code> → kategori{" "}
+          <code className="mono">Model Gambar</code> atau taruh manual di{" "}
+          <code className="mono">server/storage/generate/image/&lt;id&gt;/</code> — bisa folder{" "}
+          <em>diffusers</em> lengkap (<code className="mono">model_index.json</code>) atau satu file{" "}
+          <code className="mono">*.safetensors</code>/<code className="mono">*.ckpt</code>. Lihat{" "}
+          <code className="mono">server/storage/generate/image/README.md</code>.
         </div>
       )}
 
@@ -160,14 +167,40 @@ export default function ImageStudio() {
               options={modelOptions}
               onChange={setModelId}
               placeholder="Pilih model…"
-              disabled={controlsDisabled}
+              disabled={backendDown}
             />
+
+            {selectedModel ? (
+              <div className="rounded-md border border-edge bg-canvas-subtle p-3 text-[11px] leading-relaxed text-ink-muted">
+                {selectedModel.description
+                  ? selectedModel.description
+                  : "Menghasilkan gambar dari teks dengan model yang sudah terpasang. Pilih model, masukkan prompt, dan klik Generate."}
+                {notInstalled && (
+                  <div className="mt-2 text-amber-700">
+                    Belum terpasang. Unduh lewat Setup &amp; Runtime → <code className="mono">Model Gambar</code> (Tiny-SD / SD 1.5 / DreamShaper).
+                  </div>
+                )}
+                {notInstalled && (
+                  <div className="mt-1 text-amber-700">Model belum terpasang, generate disable. Unduh terlebih dahulu lewat Setup &amp; Runtime.</div>
+                )}
+              </div>
+            ) : (
+              noModels && (
+                <div className="rounded-md border border-edge bg-canvas-subtle p-3 text-[11px] leading-relaxed text-ink-muted">
+                  Menghasilkan gambar dengan memanfaatkan model yang sudah terpasang. Lebih ringan dan cepat untuk pembuatan gambar.
+                  <div className="mt-2 text-amber-700">
+                    Belum ada model terpasang. Unduh lewat Setup &amp; Runtime → <code className="mono">Model Gambar</code>.
+                  </div>
+                  <div className="mt-1 text-amber-700">Model belum terpasang, generate disable. Unduh terlebih dahulu lewat Setup &amp; Runtime.</div>
+                </div>
+              )
+            )}
 
             <div className="flex gap-1 rounded-md border border-edge bg-canvas-subtle p-1">
               <button
                 type="button"
                 onClick={() => setMode("txt2img")}
-                disabled={controlsDisabled}
+                disabled={backendDown || notInstalled}
                 className={`flex-1 rounded px-2 py-1.5 text-xs font-medium ${
                   mode === "txt2img"
                     ? "bg-white shadow-sm"
@@ -179,7 +212,7 @@ export default function ImageStudio() {
               <button
                 type="button"
                 onClick={() => setMode("img2img")}
-                disabled={controlsDisabled}
+                disabled={backendDown || notInstalled}
                 className={`flex-1 rounded px-2 py-1.5 text-xs font-medium ${
                   mode === "img2img"
                     ? "bg-white shadow-sm"
@@ -199,7 +232,7 @@ export default function ImageStudio() {
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={4}
                 maxLength={2000}
-                disabled={controlsDisabled}
+                disabled={backendDown || notInstalled}
                 placeholder="masterpiece, best quality, ..."
                 className="w-full resize-y rounded-md border border-edge px-2.5 py-2 text-[13px]"
                 style={{ fontFamily: "inherit" }}
@@ -216,7 +249,7 @@ export default function ImageStudio() {
                 onChange={(e) => setNegativePrompt(e.target.value)}
                 rows={2}
                 maxLength={1000}
-                disabled={controlsDisabled}
+                disabled={backendDown || notInstalled}
                 placeholder="lowres, bad anatomy, blurry, ..."
                 className="w-full resize-y rounded-md border border-edge px-2.5 py-2 text-[13px]"
                 style={{ fontFamily: "inherit" }}
@@ -300,7 +333,7 @@ export default function ImageStudio() {
                     max={150}
                     value={steps}
                     onChange={(e) => setSteps(parseInt(e.target.value) || 1)}
-                    disabled={controlsDisabled}
+                    disabled={backendDown || notInstalled}
                     className="w-full rounded-md border border-edge px-1.5 py-1 text-xs"
                   />
                 </div>
@@ -317,7 +350,7 @@ export default function ImageStudio() {
                     onChange={(e) =>
                       setGuidanceScale(parseFloat(e.target.value) || 0)
                     }
-                    disabled={controlsDisabled}
+                    disabled={backendDown || notInstalled}
                     className="w-full rounded-md border border-edge px-1.5 py-1 text-xs"
                   />
                 </div>
@@ -330,7 +363,7 @@ export default function ImageStudio() {
                       <select
                         value={width}
                         onChange={(e) => setWidth(parseInt(e.target.value))}
-                        disabled={controlsDisabled}
+                        disabled={backendDown || notInstalled}
                         className="w-full rounded-md border border-edge px-1.5 py-1 text-xs"
                       >
                         {[512, 640, 768, 1024].map((w) => (
@@ -347,7 +380,7 @@ export default function ImageStudio() {
                       <select
                         value={height}
                         onChange={(e) => setHeight(parseInt(e.target.value))}
-                        disabled={controlsDisabled}
+                        disabled={backendDown || notInstalled}
                         className="w-full rounded-md border border-edge px-1.5 py-1 text-xs"
                       >
                         {[512, 640, 768, 1024].map((h) => (
@@ -371,7 +404,7 @@ export default function ImageStudio() {
                     min={0}
                     value={seedText}
                     onChange={(e) => setSeedText(e.target.value)}
-                    disabled={controlsDisabled}
+                    disabled={backendDown || notInstalled}
                     placeholder="mis. 42"
                     className="w-full rounded-md border border-edge px-1.5 py-1 text-xs"
                   />
@@ -383,7 +416,7 @@ export default function ImageStudio() {
                   <select
                     value={nImages}
                     onChange={(e) => setNImages(parseInt(e.target.value))}
-                    disabled={controlsDisabled}
+                    disabled={backendDown || notInstalled}
                     className="w-full rounded-md border border-edge px-1.5 py-1 text-xs"
                   >
                     {[1, 2, 4].map((n) => (
@@ -398,13 +431,7 @@ export default function ImageStudio() {
 
             <button
               className="btn btn-primary self-start"
-              disabled={
-                controlsDisabled ||
-                generating ||
-                !prompt.trim() ||
-                !modelId ||
-                (mode === "img2img" && !initFile)
-              }
+              disabled={generateDisabled || generating}
               onClick={handleGenerate}
             >
               {generating ? "Membuat gambar…" : "Generate"}

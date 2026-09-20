@@ -30,6 +30,7 @@ function activeMap(jobs: SetupJob[]): Record<string, SetupJob> {
 const CATEGORY_LABEL: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   runtime: { label: "Runtime GPU", color: "text-orange-700", bg: "bg-orange-50 border-orange-200", icon: "⚡" },
   model: { label: "Model Gambar", color: "text-purple-700", bg: "bg-purple-50 border-purple-200", icon: "🎨" },
+  model_video: { label: "Model Video", color: "text-pink-700", bg: "bg-pink-50 border-pink-200", icon: "🎬" },
   stem: { label: "Stem Separator", color: "text-blue-700", bg: "bg-blue-50 border-blue-200", icon: "🎛️" },
 };
 
@@ -251,7 +252,7 @@ export default function SetupModal({ open, onClose }: Props) {
                 </div>
               ) : null}
 
-              {(["runtime", "model", "stem"] as const).map((cat) => {
+              {(["runtime", "model", "model_video", "stem"] as const).map((cat) => {
                 const groupTasks = tasks
                   .filter((t) => t.category === cat)
                   .sort((a, b) => a.name.localeCompare(b.name));
@@ -261,7 +262,9 @@ export default function SetupModal({ open, onClose }: Props) {
                     ? { title: "Runtime GPU", desc: "Framework komputasi GPU (NVIDIA CUDA) untuk menjalankan semua model AI." }
                     : cat === "model"
                       ? { title: "Model Gambar", desc: "Bobot model teks-ke-gambar. Unduh satu atau lebih sesuai kebutuhan." }
-                      : { title: "Stem Separator", desc: "Bobot Demucs untuk memisahkan lagu menjadi vocals, drums, bass & other. Unduh sesuai model yang akan dipakai." };
+                      : cat === "model_video"
+                        ? { title: "Model Video", desc: "Bobot model teks-ke-video. AnimateDiff ringan atau Wan 2.1 kualitas lebih tinggi." }
+                        : { title: "Stem Separator", desc: "Bobot Demucs untuk memisahkan lagu menjadi vocals, drums, bass & other. Unduh sesuai model yang akan dipakai." };
                 return (
                   <div key={cat} className="space-y-2">
                     <div>
@@ -276,7 +279,7 @@ export default function SetupModal({ open, onClose }: Props) {
                       const showBar = !done && (running || (pct > 0 && pct < 100));
                       const partial = !done && !running && pct > 0 && pct < 100;
                       const c = CATEGORY_LABEL[task.category] ?? { label: task.category, color: "", bg: "", icon: "📦" };
-                      const isModel = task.category === "model";
+                      const isModel = task.category === "model" || task.category === "model_video";
                       const deletable = isModel && !running && (done || partial);
                       const isDeleting = confirmDeleteId === task.id;
                       return (
@@ -328,7 +331,7 @@ export default function SetupModal({ open, onClose }: Props) {
                                     ? "Sedang berjalan — tidak perlu klik lagi"
                                     : undefined
                                 }
-                                className="rounded-md border border-edge bg-white w-20 px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-md border border-edge bg-white w-18 px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 {done
                                   ? "Selesai"

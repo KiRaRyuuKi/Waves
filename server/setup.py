@@ -16,23 +16,31 @@ from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
-# Project root = parent dari folder server/.
+# Project root is the parent of the server/ directory.
 SERVER_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SERVER_DIR.parent
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 
-# Lokasi target penyimpanan (sama seperti di skrip PS1 + downloader).
+# Target storage locations (consistent with PS1 script and downloader).
 TORCH_DIR = PROJECT_ROOT / "server" / "storage" / "torch"   # wheel torch+torchaudio (bersarang dalam whls/)
-TINYSD_DIR = PROJECT_ROOT / "server" / "storage" / "diffusers" / "tiny-sd"
-DIFFUSERS_DIR = PROJECT_ROOT / "server" / "storage" / "diffusers"
-SD15_DIR = DIFFUSERS_DIR / "stable-diffusion"
-DREAMSHAPER_DIR = DIFFUSERS_DIR / "dream-shaper"
+GENERATE_DIR = PROJECT_ROOT / "server" / "storage" / "generate"
+IMAGE_DIR = GENERATE_DIR / "image"
+TINYSD_DIR = IMAGE_DIR / "tiny-sd"
+DIFFUSERS_DIR = IMAGE_DIR  # alias untuk kompatibilitas
+SD15_DIR = IMAGE_DIR / "stable-diffusion"
+DREAMSHAPER_DIR = IMAGE_DIR / "dream-shaper"
+
+# Video models (Video Generation feature) — see server/video.py.
+VIDEO_DIR = GENERATE_DIR / "video"
+AD_MOTION_DIR = VIDEO_DIR / "animatediff" / "motion-adapter"
+AD_CLIP_DIR = VIDEO_DIR / "animatediff" / "clip-vit-large"
+WAN_DIR = VIDEO_DIR / "wan" / "t2v-1.3b"
 
 # Cache bobot Demucs (dibaca oleh torch.hub → separator.py). Disamakan
-# dengan folder default torch hub di platform ini.
+# Aligned with the default torch hub directory on this platform.
 STEM_DIR = Path.home() / ".cache" / "torch" / "hub" / "checkpoints"
 
-# Byte yang "diketahui" untuk menilai status tanpa menjalankan skrip.
+# Known byte totals for progress estimation without running scripts.
 # Total = jumlah ukuran file besar (yang dominan). File kecil ikut
 # dihitung setelah benar-benar ditulis (ukuran aktualnya).
 # torchaudio 2.11.0 (1519625) = versi yang tersedia di mirror Aliyun utk torch 2.14.0.
@@ -45,6 +53,15 @@ TINYSD_TOTAL = (
 # terpasang, _task_state memakai ukuran aktualnya.
 SD15_TOTAL = 4265380512                   # v1-5-pruned-emaonly.ckpt (safetensors 4265146304 dibulatkan)
 DREAMSHAPER_TOTAL = 4265203904            # DreamShaper_4BakedVae-inpainting versi fp32
+
+# --- Model video (fitur Video Generation) ---
+# AnimateDiff: motion adapter (v1-5-2, fp16) + CLIP vision (model.safetensors).
+AD_MOTION_TOTAL = 1815329816
+AD_CLIP_TOTAL = 1710540580
+# Wan 2.1 T2V 1.3B (layout diffusers): text_encoder UMT5-XXL (~21,7 GB, 5 shard)
+# + transformer (~5,4 GB) + vae (~0,5 GB) ≈ 27,6 GB. Angka estimasi — setelah
+# terpasang, status memakai ukuran asli di disk (auto_detect).
+WAN_TOTAL = 21670 * 1024 * 1024 + 5413 * 1024 * 1024 + 484 * 1024 * 1024
 
 # File besar per-task (untuk check "sudah tuntas belum").
 # Torch dicocokkan pakai pola awalan (versi bisa beda: 2.14.0, 2.11.0, dst).
@@ -176,7 +193,7 @@ def _task_state(task_id: str) -> dict:
 TASKS = [
     {
         "id": "tiny_sd",
-        "name": "Model Tiny-SD (diffusers)",
+        "name": "Model Tiny-SD",
         "description": "Model Stable Diffusion ringan dari HuggingFace "
         "(~1 GB) yang dipakai Image Generation.",
         "info": "Model AI teks-ke-gambar. Ringan & cepat, cocok untuk "
@@ -192,7 +209,7 @@ TASKS = [
     {
         "id": "sd15",
         "name": "Model Stable Diffusion 1.5",
-        "description": "Model SD 1.5 standar industri dari HuggingFace (~4,3 GB).",
+        "description": "Model SD 1.5 standar industri dari HuggingFace (~5,1 GB).",
         "info": "Model paling populer di komunitas. Hasil bagus dan "
         "kompatibel dengan LoRA & ControlNet.",
         "script": "dl_model.ps1",
@@ -210,7 +227,7 @@ TASKS = [
     {
         "id": "dreamshaper",
         "name": "Model DreamShaper 8",
-        "description": "Fine-tune SD 1.5 untuk ilustrasi artistik (~3,7 GB).",
+        "description": "Fine-tune SD 1.5 untuk ilustrasi artistik (~5,1 GB).",
         "info": "Versi lebih detail dari SD 1.5. Unggul untuk ilustrasi, "
         "konsep art, dan fantasy.",
         "script": "dl_model.ps1",
@@ -218,6 +235,70 @@ TASKS = [
         "category": "model",
         "total_bytes": DREAMSHAPER_TOTAL,
         "check_dir": DREAMSHAPER_DIR,
+        "auto_detect": True,
+        "needs_python": False,
+    },
+    {
+        "id": "ad_motion",
+        "name": "Motion Adapter AnimateDiff",
+        "description": "Motion module AnimateDiff v1-5-2 (~1,8 GB) — mengubah "
+        "model SD 1.5 yang sudah terpasang jadi generator video pendek.",
+        "info": "Bagian inti fitur Video Generation (AnimateDiff). Ringan & "
+        "cepat, cocok untuk GPU 4 GB. Output 512x512, 16 frame. Wajib "
+        "dipasang bersama 'CLIP Vision'.",
+        "script": "dl_model.ps1",
+        "script_args": [
+            "-RepoId", "guoyww/animatediff-motion-adapter-v1-5-2",
+            "-Base", "server\\storage\\generate\\video\\animatediff",
+            "-Folder", "motion-adapter",
+            "-KeepRoot",
+            "-Exclude", "diffusion_pytorch_model.safetensors,README.md,.gitattributes",
+        ],
+        "category": "model_video",
+        "total_bytes": AD_MOTION_TOTAL,
+        "check_dir": AD_MOTION_DIR,
+        "check_files": {"diffusion_pytorch_model.fp16.safetensors": AD_MOTION_TOTAL},
+        "needs_python": False,
+    },
+    {
+        "id": "ad_clip",
+        "name": "Model CLIP Vision AnimateDiff",
+        "description": "Encoder citra CLIP ViT-Large/14 (~1,7 GB) sebagai "
+        "pelengkap motion adapter AnimateDiff v2.",
+        "info": "Dipakai motion module AnimateDiff v1-5-2 untuk memahami citra "
+        "tiap frame. Wajib ada bareng 'Motion Adapter AnimateDiff'.",
+        "script": "dl_model.ps1",
+        "script_args": [
+            "-RepoId", "openai/clip-vit-large-patch14",
+            "-Base", "server\\storage\\generate\\video\\animatediff",
+            "-Folder", "clip-vit-large",
+            "-KeepRoot",
+            "-Exclude", "pytorch_model.bin,flax_model.msgpack,tf_model.h5,README.md,.gitattributes",
+        ],
+        "category": "model_video",
+        "total_bytes": AD_CLIP_TOTAL,
+        "check_dir": AD_CLIP_DIR,
+        "check_files": {"model.safetensors": AD_CLIP_TOTAL},
+        "needs_python": False,
+    },
+    {
+        "id": "wan_t2v_13b",
+        "name": "Model Wan 2.1 T2V 1.3B",
+        "description": "Model video ringan Wan 2.1 dari Alibaba (~28 GB, "
+        "layout diffusers). Kualitas gerak lebih baik dari AnimateDiff.",
+        "info": "Butuh unduhan besar (~28 GB) & RAM 24 GB+; di GPU 4 GB "
+        "berjalan dengan offload ke RAM jadi lambat. Pilih ini kalau ingin "
+        "hasil video yang lebih natural.",
+        "script": "dl_model.ps1",
+        "script_args": [
+            "-RepoId", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+            "-Base", "server\\storage\\generate\\video\\wan",
+            "-Folder", "t2v-1.3b",
+            "-Exclude", "*.jpg,*.JPG,*.jpeg,*.png,*.md,.gitattributes",
+        ],
+        "category": "model_video",
+        "total_bytes": WAN_TOTAL,
+        "check_dir": WAN_DIR,
         "auto_detect": True,
         "needs_python": False,
     },
@@ -269,7 +350,7 @@ TASKS = [
     {
         "id": "torch",
         "name": "PyTorch + Torchaudio (CUDA 12.6)",
-        "description": "Wheel PyTorch CUDA 12.6 dari mirror Aliyun (~2,6 GB) "
+        "description": "Wheel PyTorch CUDA 12.6 dari mirror Aliyun (~2,4 GB) "
         "untuk difusi & training. Bisa langsung dipasang ke Python tujuan "
         "supaya dipakai ulang tanpa unduh ulang.",
         "info": "Framework komputasi GPU dari NVIDIA. Dibutuhkan agar "
@@ -795,6 +876,31 @@ async def run_task(
     if existing is not None:
         return {"job_id": existing.id, "task_id": task_id}
 
+    # A03 fix: validasi python_path tanpa login — hanya izinkan python.exe yang sah
+    if python_path:
+        # hanya huruf, angka, : \ / . _ - dan harus berakhir python.exe
+        if not re.match(r"^[A-Za-z]:[\\/][^<>:\"|?*\n]+python\.exe$", python_path):
+            raise HTTPException(400, "python_path tidak valid")
+        p = Path(python_path)
+        # canonicalize & must be file
+        try:
+            rp = p.resolve()
+        except OSError:
+            raise HTTPException(400, "python_path tidak dapat di-resolve")
+        if not rp.is_file() or rp.name.lower() != "python.exe":
+            raise HTTPException(400, "python.exe tidak ditemukan")
+        # hanya izinkan di PROJECT_ROOT/.venv atau di C:\Python / Program Files
+        allowed_roots = [PROJECT_ROOT.resolve(), Path("C:/Python").resolve(), Path("C:/Program Files/Python").resolve()]
+        # juga izinkan yang terdaftar di _suggested_pythons()
+        try:
+            suggested = [Path(s).resolve() for s in _suggested_pythons()]
+        except Exception:
+            suggested = []
+        if not any(str(rp).lower().startswith(str(r).lower()) for r in allowed_roots + suggested):
+            # fallback: izinkan jika memang ada di suggested list (sudah di atas) atau di venv
+            if str(rp).lower() not in [str(s).lower() for s in suggested]:
+                raise HTTPException(403, "python_path di luar lokasi yang diizinkan")
+
     script = _script_for(task_id)
     args: list[str] = task.get("script_args", []).copy()
     if task.get("needs_python"):
@@ -947,8 +1053,8 @@ async def delete_task(task_id: str):
     task = next((t for t in TASKS if t["id"] == task_id), None)
     if task is None:
         raise HTTPException(404, "Task tidak dikenal")
-    if task.get("category") != "model":
-        raise HTTPException(400, "Hanya model gambar yang bisa dihapus dari sini")
+    if task.get("category") not in ("model", "model_video"):
+        raise HTTPException(400, "Hanya task model yang bisa dihapus dari sini")
 
     target = task.get("check_dir")
     if target is None or not target.is_dir():

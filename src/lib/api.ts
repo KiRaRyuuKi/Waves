@@ -10,13 +10,14 @@ export function isBackendDown(err: unknown): boolean {
     lower.includes("failed to fetch") ||
     lower.includes("networkerror") ||
     lower.includes("internal server error") ||
+    lower.includes("backend belum dijalankan") ||
     lower === "request failed (500)" ||
     lower === "500"
   );
 }
 
 export const BACKEND_DOWN_HINT =
-  'Backend belum dijalankan. Mulai dulu dengan `python -m uvicorn server.main:app --port 9035`, lalu muat ulang halaman ini. Panel di bawah dinonaktifkan sampai backend menyala.';
+  'Backend belum dijalankan. Mulai dulu dengan `python -m uvicorn server.waves:app --port 9035`, lalu muat ulang halaman ini. Panel di bawah dinonaktifkan sampai backend menyala.';
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {

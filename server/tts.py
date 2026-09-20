@@ -1,18 +1,3 @@
-"""Voice synthesis via VITS (vendored in vendor/vits).
-
-Convention for adding a voice model — drop a folder under
-server/storage/models/<model_id>/ containing:
-
-  config.json   - the VITS hyperparameters this checkpoint was trained with
-  meta.json     - {"name": str, "language": str, "sample_text": str,
-                   "speakers": [{"id": int, "name": str}, ...]}
-  a checkpoint  - model.pth (or any single *.pth file in the folder)
-
-Nothing is bundled here — model weights are large and specific to
-whatever character voices you have, so this only defines the contract
-and loads whatever you place there.
-"""
-
 from __future__ import annotations
 
 import json

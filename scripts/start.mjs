@@ -535,7 +535,7 @@ async function main() {
   );
 
   const selectedBin = isStart ? nextStartBin : nextDevBin;
-  const nextArgs = ["-p", FE_PORT, "-H", "0.0.0.0"];
+  const nextArgs = ["-p", FE_PORT, "-H", "127.0.0.1"];
 
   INFO(
     `Mode: ${isStart ? "production (next start)" : "development (next dev)"}`,
@@ -549,9 +549,9 @@ async function main() {
     [
       "-m",
       "uvicorn",
-      "server.main:app",
+      "server.waves:app",
       "--host",
-      "0.0.0.0",
+      "127.0.0.1",
       "--port",
       BE_PORT,
     ],

@@ -118,7 +118,7 @@ export default function ServerControl() {
             {state.running ? (
               <>
                 Server berjalan ·{" "}
-                <span className="font-medium text-red-700">
+                <span className="font-medium text-green-700">
                   {state.mode === "start" ? "Production" : "Development"}
                 </span>
               </>

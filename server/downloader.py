@@ -64,9 +64,14 @@ YTDLP_TIMEOUT = 90
 
 
 def _validate_url(url: str) -> str:
+    import ipaddress
+    import socket
+
     try:
         parsed = urlparse(url)
         host = parsed.hostname or ""
+        if parsed.scheme not in ("http", "https"):
+            raise HTTPException(status_code=400, detail="URL tidak valid")
     except Exception:
         raise HTTPException(status_code=400, detail="URL tidak valid")
 
@@ -75,6 +80,20 @@ def _validate_url(url: str) -> str:
             status_code=400,
             detail="Platform tidak didukung. Hanya YouTube, Instagram, Facebook, dan X (Twitter) yang didukung.",
         )
+
+    # A10 SSRF defense-in-depth: blokir IP privat meski host allowlist (anti DNS rebinding)
+    try:
+        ip = ipaddress.ip_address(socket.gethostbyname(host))
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise HTTPException(status_code=403, detail="Akses ke alamat internal tidak diizinkan")
+        # blokir cloud metadata & link-local
+        if ip in ipaddress.ip_network("169.254.0.0/16"):
+            raise HTTPException(status_code=403, detail="Akses ke metadata tidak diizinkan")
+    except HTTPException:
+        raise
+    except Exception:
+        # jika DNS gagal, biarkan yt-dlp yang handle — tapi jangan bocorkan internal
+        pass
 
     return PLATFORM_NAMES.get(host, host)
 

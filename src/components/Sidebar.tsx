@@ -70,6 +70,16 @@ const NAV: NavItem[] = [
     ),
   },
   {
+    href: "/video",
+    label: "Video Generation",
+    icon: (
+      <>
+        <rect x="2" y="5" width="14" height="14" rx="2" />
+        <path d="m22 7-6 4 6 4V7Z" strokeLinejoin="round" />
+      </>
+    ),
+  },
+  {
     href: "/downloader",
     label: "Media Downloader",
     icon: (

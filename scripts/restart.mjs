@@ -47,7 +47,7 @@ mkdirSync(LOG_DIR, { recursive: true });
 const fd = openSync(path.join(LOG_DIR, "backend.log"), "a");
 const child = spawn(
   py,
-  ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port],
+  ["-m", "uvicorn", "server.waves:app", "--host", "127.0.0.1", "--port", port],
   {
     cwd: ROOT,
     detached: true,

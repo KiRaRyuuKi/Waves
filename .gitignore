@@ -1,14 +1,12 @@
 __pycache__/
 *.pyc
 
-server/storage/models/*.pth
 server/storage/separated/*
 server/storage/training/*
 server/storage/uploads/*
 
-server/storage/diffusers/*/
-server/storage/diffusers/*.safetensors
-server/storage/diffusers/*.ckpt
+server/storage/generate/video/*/
+server/storage/generate/image/*/
 
 server/storage/torch/*
 
@@ -21,9 +19,6 @@ node_modules/
 .next/
 dist/
 
-.DS_Store
-
-*.pth
-
-# Runtime logs
 *.log
+
+.DS_Store

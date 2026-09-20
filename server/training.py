@@ -1,13 +1,3 @@
-"""Fine-tune VITS ke bahasa Indonesia — API + sesi latih.
-
-Alur penggunaan:
-  1. POST /api/training/datasets   upload audio (list) + transkrip (JSON).
-  2. GET  /api/training/datasets   lihat/ubah transkrip (PATCH).
-  3. POST /api/training/start      mulai pelatihan (jalan di thread).
-  4. GET  /api/training/status/{id} pantau progres.
-  5. Model hasil muncul di /api/voice/models untuk disintesis ulang.
-"""
-
 from __future__ import annotations
 
 import json

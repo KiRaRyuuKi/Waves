@@ -1,5 +1,5 @@
 export type SetupTaskStatus = "not_installed" | "installed" | "partial";
-export type SetupTaskCategory = "runtime" | "model" | "stem";
+export type SetupTaskCategory = "runtime" | "model" | "model_video" | "stem";
 export type SetupJobStatus = "queued" | "running" | "done" | "error";
 
 export interface SetupTask {
@@ -45,7 +45,7 @@ export interface SetupStreamEvent {
 }
 
 const BACKEND_DOWN_HINT =
-  "Backend belum dijalankan. Mulai dulu dengan `python -m uvicorn server.main:app --port 9035`, lalu muat ulang halaman ini.";
+  "Backend belum dijalankan. Mulai dulu dengan `python -m uvicorn server.waves:app --port 9035`, lalu muat ulang halaman ini.";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {

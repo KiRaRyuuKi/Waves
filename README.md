@@ -33,7 +33,8 @@ Halaman untuk melatih ulang model agar bisa berbicara bahasa Indonesia, lengkap 
 - **Export Mix Kustom**: Merender kombinasi fader/mute/solo menjadi file .wav langsung di browser (OfflineAudioContext)
 - **Voice Synthesis**: Suara karakter berbasis VITS yang berjalan lokal, dengan banyak karakter & speaker
 - **Fine-tune VITS**: Latih model supaya bicara bahasa Indonesia dari dataset audio + transkrip sendiri
-- **Image Generation**: Generate gambar dengan Stable Diffusion (diffusers) — model ditaruh manual di `server/storage/diffusers/`, tanpa unduh otomatis
+- **Image Generation**: Generate gambar dengan Stable Diffusion (diffusers) — model ditaruh manual di `server/storage/generate/image/`, tanpa unduh otomatis
+- **Video Generation**: Buat video pendek dari teks dengan **AnimateDiff** (menempel ke model SD 1.5 yang sudah ada, ringan) atau **Wan 2.1 T2V 1.3B** (gerak lebih natural, lebih berat) — hasil `.mp4` lewat FFmpeg
 - **Riwayat & Pemulihan**: Unggahan terbaru, job yang gagal bisa dijalankan ulang, dan riwayat bisa dihapus
 - **Offline-first**: Kode Demucs di-vendor penuh; bobot model hanya perlu diunduh sekali
 
@@ -42,6 +43,7 @@ Halaman untuk melatih ulang model agar bisa berbicara bahasa Indonesia, lengkap 
 - **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS
 - **Backend**: Python, FastAPI, Uvicorn
 - **Audio/Image ML**: Demucs 4 (di-vendor), PyTorch, VITS, Stable Diffusion (diffusers)
+- **Video ML**: AnimateDiff, Wan 2.1 (diffusers), FFmpeg (encode H.264)
 - **Audio di Browser**: Web Audio API, OfflineAudioContext, AnalyserNode
 - **Proksi**: Next.js `rewrites()` meneruskan `/api/*` ke FastAPI (port 9035)
 
@@ -116,7 +118,7 @@ node scripts/start.mjs --yes               # setujui otomatis semua prompt setup
 
 #### 5a. Server Backend
 ```bash
-uvicorn server.main:app --port 9035
+uvicorn server.waves:app --port 9035
 ```
 
 #### 5b. Development Server Frontend
@@ -135,22 +137,25 @@ Waves/
 │   ├── main.py                  # API: upload, status job, download stem, retry, hapus
 │   ├── jobs.py                  # Job store (snapshot JSON + rekonsiliasi dari disk)
 │   ├── separator.py             # Menjalankan Demucs & parsing progress live
-│   ├── diffusers.py             # Image generation Stable Diffusion (diffusers, lokal-only)
+│   ├── image.py                 # Image generation Stable Diffusion (lokal-only)
+│   ├── video.py                 # Video generation AnimateDiff + Wan 2.1 (lokal-only)
 │   ├── voice.py                 # TTS VITS (katalog model, synthesize, cover)
 │   ├── tts.py                   # Inti inferensi VITS
 │   ├── training.py              # Router endpoint fine-tune
 │   ├── finetune.py              # Pipeline pelatihan VITS dari dataset
 │   └── storage/
 │       ├── models/              # Model suara VITS + katalog info.json
-│       ├── diffusers/           # Model Stable Diffusion (ditaruh manual, tanpa unduh)
+│       ├── generate/
+│       │   ├── image/           # Model Stable Diffusion (ditaruh manual, tanpa unduh)
+│       │   └── video/           # Model video (AnimateDiff & Wan) + hasil .mp4
 │       ├── uploads/             # File audio yang di-upload user
 │       ├── separated/           # Hasil pemisahan stem
 │       └── datasets/            # Dataset fine-tune
 ├── vendor/stem/                 # Sumber Demucs di-vendor (offline, tanpa GitHub)
 ├── src/                         # Frontend Next.js 15 (App Router) + TypeScript
-│   ├── app/                     # layout.tsx, page.tsx, voice/, training/
-│   ├── components/              # App, Mixer, ChannelStrip, VoiceStudio, TrainStudio, Dropdown, dst.
-│   └── lib/                     # api.ts, audioEngine.ts, wavEncoder.ts, peaks.ts, voiceApi.ts, trainingApi.ts
+│   ├── app/                     # layout.tsx, page.tsx, voice/, training/, image/, video/
+│   ├── components/              # App, Mixer, ChannelStrip, VoiceStudio, TrainStudio, ImageStudio, VideoStudio, dst.
+│   └── lib/                     # api.ts, audioEngine.ts, wavEncoder.ts, voiceApi.ts, imageApi.ts, videoApi.ts, dst.
 ├── docs/
 │   ├── logo/                    # Logo proyek
 │   └── screenshots/             # Screenshot antarmuka
@@ -184,6 +189,13 @@ Untuk backend production, jalankan uvicorn tanpa `--reload` di belakang reverse 
   - `htdemucs` → `955717e8-8726e21a.th` (`hybrid_transformer/`)
   - `htdemucs_ft` → `f7e0c4bc-ba3fe64a.th`, `d12395a8-e57c48e6.th`, `92cfc3b6-ef3bcb9c.th`, `04573f0d-f3cf25b2.th` (`hybrid_transformer/`)
   - `mdx_extra` → `e51eebcc-c1b80bdd.th`, `a1d90b5c-ae9d2452.th`, `5d2d6c55-db83574e.th`, `cfa93e08-61801ae1.th` (`mdx_final/`)
+
+### Catatan Model Video
+- Bobot video **tidak diunduh saat generate**. Pasang lewat **Setup & Runtime** — kategori *model* dengan awalan **Video:**:
+  - `Video: Motion Adapter AnimateDiff` (~1,8 GB) + `Video: CLIP Vision` (~1,7 GB) → untuk AnimateDiff (pakai model SD 1.5 yang sudah ada),
+  - `Video: Wan 2.1 T2V 1.3B` (~28 GB) → untuk Wan (lebih berat; di GPU 4 GB jalan dengan *offload* ke RAM, jadi lambat).
+- Butuh **FFmpeg** di PATH untuk meng-encode hasil menjadi `.mp4` (H.264).
+- Model video disimpan di `server/storage/generate/video/` dan di-ignore git.
 
 ## 🛠️ Troubleshooting
 

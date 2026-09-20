@@ -1,11 +1,3 @@
-"""Runs Demucs as a subprocess and reports live progress.
-
-Demucs prints a tqdm progress bar to stderr per model pass (htdemucs_ft
-runs 4 internal models, so we scale progress across all of them). We
-parse the "NN%|" pattern tqdm emits rather than depending on any
-demucs internals, so this keeps working across demucs versions.
-"""
-
 from __future__ import annotations
 
 import re

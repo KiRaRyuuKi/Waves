@@ -28,11 +28,20 @@ cn2an>=0.5
 pyopenjtalk>=0.3
 
 # --- Image generation (Stable Diffusion) ---
-# Pipa diffusers dipakai lewat server/diffusers.py. Bobot model TIDAK diunduh
-# otomatis — taruh manual di server/storage/diffusers/<id>/ (lihat README
+# Pipa diffusers dipakai lewat server/image.py. Bobot model TIDAK diunduh
+# otomatis — taruh manual di server/storage/generate/image/<id>/ (lihat README
 # di folder itu). Kompatibel dengan torch 2.x yang sudah dipakai Demucs/VITS.
 diffusers>=0.30
 safetensors>=0.4
 accelerate>=0.30
 pillow>=12.0
 soundfile>=0.14
+
+# --- Video generation (AnimateDiff + Wan 2.1) ---
+# server/video.py. AnimateDiff menempel ke model SD di storage/generate/image/;
+# Wan 2.1 butuh diffusers >= 0.33 (WanPipeline), UMT5 tokenizer (sentencepiece).
+# Bobot video juga TIDAK diunduh otomatis — pakai menu Setup & Runtime.
+diffusers>=0.33
+transformers>=4.49
+sentencepiece>=0.2
+ftfy>=6.2

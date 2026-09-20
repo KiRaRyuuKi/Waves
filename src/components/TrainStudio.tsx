@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Dropdown, { type DropdownOption } from "./Dropdown";
 import { useDevice } from "../lib/deviceContext";
+import { BACKEND_DOWN_HINT, isBackendDown } from "../lib/api";
 import {
   deleteTrainingDataset,
   fetchBaseModels,
@@ -39,6 +40,7 @@ export default function TrainStudio() {
   const { device } = useDevice();
   const [datasets, setDatasets] = useState<TrainingDataset[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [backendDown, setBackendDown] = useState(false);
 
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingTexts, setPendingTexts] = useState<Record<string, string>>({});
@@ -65,12 +67,14 @@ export default function TrainStudio() {
 
   const refreshDatasets = useCallback(async () => {
     try {
-      setDatasets(await fetchTrainingDatasets());
+      const ds = await fetchTrainingDatasets();
+      setDatasets(ds);
       setLoadError(null);
+      setBackendDown(false);
     } catch (err) {
-      setLoadError(
-        err instanceof Error ? err.message : "Gagal memuat dataset.",
-      );
+      const down = isBackendDown(err);
+      setBackendDown(down);
+      setLoadError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal memuat dataset.");
     }
   }, []);
 
@@ -154,7 +158,9 @@ export default function TrainStudio() {
       setPendingTexts({});
       await refreshDatasets();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Upload gagal.");
+      const down = isBackendDown(err);
+      if (down) setBackendDown(true);
+      setActionError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Upload gagal.");
     } finally {
       setUploading(false);
     }
@@ -171,9 +177,9 @@ export default function TrainStudio() {
       );
       await refreshDatasets();
     } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Gagal menyimpan transkrip.",
-      );
+      const down = isBackendDown(err);
+      if (down) setBackendDown(true);
+      setActionError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal menyimpan transkrip.");
     } finally {
       setSavingFile(null);
     }
@@ -187,9 +193,9 @@ export default function TrainStudio() {
       if (trainDatasetId === datasetId) setTrainDatasetId("");
       await refreshDatasets();
     } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Gagal menghapus dataset.",
-      );
+      const down = isBackendDown(err);
+      if (down) setBackendDown(true);
+      setActionError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal menghapus dataset.");
     }
   };
 
@@ -217,9 +223,9 @@ export default function TrainStudio() {
       setSessionId(res.session_id);
       setStatus(null);
     } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Gagal memulai pelatihan.",
-      );
+      const down = isBackendDown(err);
+      if (down) setBackendDown(true);
+      setActionError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal memulai pelatihan.");
     } finally {
       setStarting(false);
     }
@@ -234,6 +240,7 @@ export default function TrainStudio() {
   };
 
   const running = !!status && !status.done;
+  const controlsDisabled = backendDown;
   const progress =
     status && status.total
       ? Math.min(100, (status.step / status.total) * 100)
@@ -344,7 +351,7 @@ export default function TrainStudio() {
                 <div>
                   <button
                     className="btn btn-primary"
-                    disabled={uploading}
+                    disabled={uploading || controlsDisabled}
                     onClick={handleUpload}
                   >
                     {uploading ? "Mengunggah…" : "Simpan dataset"}
@@ -376,7 +383,7 @@ export default function TrainStudio() {
                   <div className="flex gap-2">
                     <button
                       className="btn"
-                      disabled={running}
+                      disabled={running || controlsDisabled}
                       onClick={() => {
                         setTrainDatasetId(ds.id);
                         setActionError(null);
@@ -407,7 +414,7 @@ export default function TrainStudio() {
                             },
                           }))
                         }
-                        disabled={running}
+                        disabled={running || controlsDisabled}
                         className={areaCls}
                         style={{ fontFamily: "inherit", flex: 1 }}
                       />
@@ -444,7 +451,7 @@ export default function TrainStudio() {
                   setActionError(null);
                 }}
                 placeholder="Pilih dataset…"
-                disabled={running}
+                disabled={running || controlsDisabled}
               />
             </div>
             <div>
@@ -457,7 +464,7 @@ export default function TrainStudio() {
                   setActionError(null);
                 }}
                 placeholder="Pilih model…"
-                disabled={running}
+                disabled={running || controlsDisabled}
               />
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -466,7 +473,7 @@ export default function TrainStudio() {
                 <input
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
-                  disabled={running}
+                  disabled={running || controlsDisabled}
                   placeholder="Model Indonesia"
                   className={fieldCls}
                 />
@@ -481,7 +488,7 @@ export default function TrainStudio() {
                   onChange={(e) =>
                     setSteps(Math.max(50, Math.floor(Number(e.target.value))))
                   }
-                  disabled={running}
+                  disabled={running || controlsDisabled}
                   className={fieldCls}
                 />
                 <div className="mt-0.5 text-[11px] text-ink-muted">
@@ -497,7 +504,7 @@ export default function TrainStudio() {
                   max={0.001}
                   value={lr}
                   onChange={(e) => setLr(Number(e.target.value))}
-                  disabled={running}
+                  disabled={running || controlsDisabled}
                   className={fieldCls}
                 />
               </div>
@@ -507,7 +514,7 @@ export default function TrainStudio() {
               <input
                 value={sampleText}
                 onChange={(e) => setSampleText(e.target.value)}
-                disabled={running}
+                disabled={running || controlsDisabled}
                 placeholder="Halo, apa kabar teman-teman?"
                 className={fieldCls}
               />

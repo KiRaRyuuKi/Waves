@@ -1,21 +1,3 @@
-"""Fine-tuning VITS ke bahasa Indonesia.
-
-Alur:
-  1. Muat bobot model dasar + hyperparameter dari _default_config.json.
-  2. Baca pasangan audio+transkrip dari folder dataset (hasil upload API).
-  3. Loop pelatihan GAN (generator + MultiPeriodDiscriminator) ala upstream
-     vits/train.py, jalan di CPU tanpa perlu CUDA.
-  4. Simpan hasil sebagai model baru di server/storage/models/<model_id>/,
-     lalu muncul otomatis di list_models() / /api/voice/models.
-
-Catatan penting yang membedakan dengan upstream:
-  - `segment_size` instan model dipakai dalam FRAME z (8192 sampel / 256 hop
-    = 32 frame), jadi segmen latih cukup audio >= 8192 sampel (~0.4 dtk).
-  - Mel target dihitung dari irisan audio (bukan slice spektrogram frame),
-    konsisten dengan mel y_hat generator.
-  - Cleaner teks: indonesian_cleaners (vendor/vits/text/id.py).
-"""
-
 from __future__ import annotations
 
 import json

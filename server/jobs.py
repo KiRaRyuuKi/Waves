@@ -1,13 +1,3 @@
-"""Job registry persisted to a JSON snapshot + reconciled from disk.
-
-Kept intentionally simple (no external DB) since this is a single-user,
-local-first tool. Every create/update is mirrored to storage/jobs.json so
-uploaded jobs stay accessible across server restarts. On startup we also
-scan the uploads/ directory and reconstruct records for any job whose
-files still exist on disk but are missing from the snapshot (e.g. created
-by an older version that never persisted).
-"""
-
 from __future__ import annotations
 
 import json

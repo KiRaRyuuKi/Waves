@@ -1,11 +1,3 @@
-"""Shared device resolution (cpu / cuda / auto) across features.
-
-Semua fitur yang berat (stem demucs, VITS, fine-tune, diffusers) memakai
-helper ini supaya pilihan "Auto / CPU / CUDA" konsisten: frontend memilih
-string mentah, backend menyelesaikan ke device betulan. "auto" berarti
-CUDA kalau tersedia, fallback ke CPU.
-"""
-
 from __future__ import annotations
 
 import ctypes
