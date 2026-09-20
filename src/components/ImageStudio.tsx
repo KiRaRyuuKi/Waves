@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchSdModels, generateImage, sdCoverUrl, type SdModelInfo } from "../lib/imageApi";
+import { fetchModels, generateImage, sdCoverUrl, type ModelInfo } from "../lib/imageApi";
 import Dropdown, { type DropdownOption } from "./Dropdown";
 import { useDevice } from "../lib/deviceContext";
 import { BACKEND_DOWN_HINT, isBackendDown } from "../lib/api";
 
 export default function ImageStudio() {
-  const [models, setModels] = useState<SdModelInfo[] | null>(null);
+  const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [backendDown, setBackendDown] = useState(false);
   const [modelId, setModelId] = useState<string>("");
@@ -30,7 +30,7 @@ export default function ImageStudio() {
   const [genError, setGenError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchSdModels()
+    fetchModels()
       .then((list) => {
         setModels(list);
         const first = list[0];
@@ -72,11 +72,11 @@ export default function ImageStudio() {
             {m.name.trim().charAt(0).toUpperCase() || "•"}
           </span>
         ),
-        right: m.description ? (
-          <span className="max-w-40 flex-shrink-0 truncate text-[11px] text-ink-muted">
-            {m.description}
-          </span>
-        ) : undefined,
+        right: m.installed ? (
+          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-emerald-600">Terpasang</span>
+        ) : (
+          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-amber-600">Belum terpasang</span>
+        ),
       })),
     [models]
   );

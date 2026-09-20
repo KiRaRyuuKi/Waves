@@ -140,11 +140,7 @@ export default function VideoStudio() {
             {m.kind === "wan" ? "W" : "A"}
           </span>
         ),
-        right: m.description ? (
-          <span className="max-w-40 flex-shrink-0 truncate text-[11px] text-ink-muted">
-            {m.description}
-          </span>
-        ) : m.installed ? (
+        right: m.installed ? (
           <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-emerald-600">Terpasang</span>
         ) : (
           <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-amber-600">Belum terpasang</span>

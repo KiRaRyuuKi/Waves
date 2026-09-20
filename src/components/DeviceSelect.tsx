@@ -46,7 +46,7 @@ export default function DeviceSelect() {
 
   return (
     <div className="relative flex items-center gap-2.5">
-      <div className="hidden items-center gap-2 text-[12px] text-ink-muted sm:flex">
+      <div className="hidden items-center gap-2.5 text-[12px] text-ink-muted sm:flex">
         <span
           title="Info Memori (RAM) Sistem"
           className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-edge bg-canvas-subtle px-2 py-1.5"

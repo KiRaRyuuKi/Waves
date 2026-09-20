@@ -76,6 +76,7 @@ def list_models() -> list[dict]:
                 "name": meta.get("name") or _pretty_name(entry.name),
                 "description": meta.get("description", ""),
                 "has_cover": _find_cover(entry) is not None,
+                "installed": True,
             }
         )
     return out

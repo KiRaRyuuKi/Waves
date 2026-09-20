@@ -1,6 +1,7 @@
-export interface SdModelInfo {
+export interface ModelInfo {
   id: string;
   name: string;
+  installed: boolean;
   description?: string;
   has_cover?: boolean;
 }
@@ -11,7 +12,7 @@ export function sdCoverUrl(modelId: string): string {
   return `/api/models/${encodeURIComponent(modelId)}/cover?${cacheBust}`;
 }
 
-export async function fetchSdModels(): Promise<SdModelInfo[]> {
+export async function fetchModels(): Promise<ModelInfo[]> {
   const res = await fetch("/api/models");
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
