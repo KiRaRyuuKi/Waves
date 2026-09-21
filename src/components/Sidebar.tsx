@@ -60,7 +60,7 @@ const NAV: NavItem[] = [
     icon: (
       <>
         <rect x="3" y="3" width="18" height="18" rx="2" />
-        <circle cx="8.5" cy="8.5" r="1.5" />
+        <circle cx="9.5" cy="9" r="1.5" />
         <path
           d="m21 15-5-5L5 21M9 9l-6 6"
           strokeLinecap="round"
@@ -75,7 +75,20 @@ const NAV: NavItem[] = [
     icon: (
       <>
         <rect x="2" y="5" width="14" height="14" rx="2" />
-        <path d="m22 7-6 4 6 4V7Z" strokeLinejoin="round" />
+        <path d="m22 7-6 5 6 4V7Z" strokeLinejoin="round" />
+      </>
+    ),
+  },
+  {
+    href: "/llm",
+    label: "LLM Hub (GGUF)",
+    icon: (
+      <>
+        <rect x="3" y="7" width="18" height="14" rx="2" />
+        <path d="M7 7V5a5 4 0 0 1 10 0v2" />
+        <circle cx="9" cy="12" r="1" />
+        <circle cx="15" cy="12" r="1" />
+        <path d="M9 15c1.5 1 4.5 1 6 0" strokeLinecap="round" />
       </>
     ),
   },

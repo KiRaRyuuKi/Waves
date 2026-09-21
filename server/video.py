@@ -20,10 +20,10 @@ router = APIRouter(prefix="/api/video", tags=["video"])
 
 VIDEO_DIR = Path(__file__).resolve().parent / "storage" / "generate" / "video"
 OUTPUTS_DIR = VIDEO_DIR / "outputs"
-AD_DIR = VIDEO_DIR / "animatediff"
+AD_DIR = VIDEO_DIR / "animate-diff"
 AD_MOTION_DIR = AD_DIR / "motion-adapter"
 AD_CLIP_DIR = AD_DIR / "clip-vit-large"
-WAN_DIR = VIDEO_DIR / "wan" / "t2v-1.3b"
+WAN_DIR = VIDEO_DIR / "wan"
 
 AD_BASE_DIR = Path(__file__).resolve().parent / "storage" / "generate" / "image"
 
@@ -135,7 +135,7 @@ async def list_video_models():
     if not _ad_installed():
         ad_note = (
             "Belum terpasang. Unduh lewat Setup & Runtime → "
-            "'Video Motion Adapter AnimateDiff' dan 'Video CLIP Vision'."
+            "'Motion Adapter AnimateDiff' dan 'CLIP Vision'."
         )
     elif not ad_bases:
         ad_note = "Motion adapter ada, tapi belum ada model SD 1.5 dasar di storage."
@@ -147,7 +147,7 @@ async def list_video_models():
         "natural. Membutuhkan ruang penyimpanan lebih besar namun memberi hasil lebih detail."
     )
     wan_note = (
-        "Belum terpasang. Unduh lewat Setup & Runtime → 'Video Wan 2.1 T2V 1.3B' "
+        "Belum terpasang. Unduh lewat Setup & Runtime → 'Wan 2.1 T2V 1.3B' "
         "(~28 GB)."
         if not _wan_installed()
         else None
@@ -157,7 +157,7 @@ async def list_video_models():
         VideoModelInfo(
             id="animatediff",
             kind="animatediff",
-            name="AnimateDiff + SD 1.5",
+            name="Animate Diff",
             description=ad_desc,
             installed=_ad_installed() and bool(ad_bases),
             installed_bytes=_folder_bytes(AD_MOTION_DIR) + _folder_bytes(AD_CLIP_DIR),
@@ -167,7 +167,7 @@ async def list_video_models():
         VideoModelInfo(
             id="wan",
             kind="wan",
-            name="Wan 2.1 T2V 1.3B",
+            name="Wan Alibaba",
             description=wan_desc,
             installed=_wan_installed(),
             installed_bytes=_folder_bytes(WAN_DIR),

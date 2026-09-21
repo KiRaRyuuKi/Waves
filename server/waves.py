@@ -25,6 +25,7 @@ from .setup import router as setup_router
 from .training import router as training_router
 from .video import router as video_router
 from .voice import router as voice_router
+from .llm import router as llm_router
 
 app = FastAPI(title="Waves API")
 
@@ -62,6 +63,7 @@ async def rate_limit_middleware(request: Request, call_next):
         or request.url.path.startswith("/api/video/generate")
         or request.url.path.startswith("/api/setup/tasks")
         or request.url.path.startswith("/api/downloader")
+        or request.url.path.startswith("/api/llm/download")
     )
     if sensitive and request.method == "POST":
         ip = request.client.host if request.client else "unknown"
@@ -81,6 +83,7 @@ app.include_router(image_router)
 app.include_router(video_router)
 app.include_router(downloader_router)
 app.include_router(setup_router)
+app.include_router(llm_router)
 app.include_router(devices.router)
 
 UPLOAD_ROOT = STORAGE_ROOT / "uploads"

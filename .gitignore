@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 
+server/storage/models/*/*.pth
 server/storage/separated/*
 server/storage/training/*
 server/storage/uploads/*
@@ -10,14 +11,16 @@ server/storage/generate/image/*/
 
 server/storage/torch/*
 
-.waves
+node_modules/
+.next/
+dist/
 
 venv/
 .venv/
 
-node_modules/
-.next/
-dist/
+.waves
+
+*.pth
 
 *.log
 

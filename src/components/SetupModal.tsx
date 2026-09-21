@@ -275,7 +275,8 @@ export default function SetupModal({ open, onClose }: Props) {
                       const active = activeByTask[task.id];
                       const running = active ? isActive(active) : false;
                       const done = task.installed && !running;
-                      const pct = running && active ? active.progress : task.percent || 0;
+                      // Use the larger of active progress and disk-based percent for live feedback
+                      const pct = running && active ? Math.max(active.progress || 0, task.percent || 0) : task.percent || 0;
                       const showBar = !done && (running || (pct > 0 && pct < 100));
                       const partial = !done && !running && pct > 0 && pct < 100;
                       const c = CATEGORY_LABEL[task.category] ?? { label: task.category, color: "", bg: "", icon: "📦" };
@@ -316,7 +317,7 @@ export default function SetupModal({ open, onClose }: Props) {
                                 {done
                                   ? `✓ ${formatBytes(task.done_bytes || taskBytes(task))}`
                                   : running && active
-                                    ? `${formatBytes(active.done_bytes)} / ${formatBytes(active.total_bytes)} (${Math.round(pct)}%)`
+                                    ? `${formatBytes(Math.max(active.done_bytes, task.done_bytes || 0))} / ${formatBytes(active.total_bytes || taskBytes(task))} (${Math.round(pct)}%)`
                                     : pct > 0
                                       ? `${formatBytes(task.done_bytes)} / ${formatBytes(taskBytes(task))} (${Math.round(pct)}%)`
                                       : `± ${formatBytes(taskBytes(task))}`}

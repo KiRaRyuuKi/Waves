@@ -32,9 +32,10 @@ DREAMSHAPER_DIR = IMAGE_DIR / "dream-shaper"
 
 # Video models (Video Generation feature) — see server/video.py.
 VIDEO_DIR = GENERATE_DIR / "video"
-AD_MOTION_DIR = VIDEO_DIR / "animatediff" / "motion-adapter"
-AD_CLIP_DIR = VIDEO_DIR / "animatediff" / "clip-vit-large"
-WAN_DIR = VIDEO_DIR / "wan" / "t2v-1.3b"
+ANIMATEDIFF_DIR = VIDEO_DIR / "animate-diff"
+AD_MOTION_DIR = ANIMATEDIFF_DIR / "motion-adapter"
+AD_CLIP_DIR = ANIMATEDIFF_DIR / "clip-vit-large"
+WAN_DIR = VIDEO_DIR / "wan"
 
 # Cache bobot Demucs (dibaca oleh torch.hub → separator.py). Disamakan
 # Aligned with the default torch hub directory on this platform.
@@ -239,52 +240,24 @@ TASKS = [
         "needs_python": False,
     },
     {
-        "id": "ad_motion",
-        "name": "Motion Adapter AnimateDiff",
-        "description": "Motion module AnimateDiff v1-5-2 (~1,8 GB) — mengubah "
-        "model SD 1.5 yang sudah terpasang jadi generator video pendek.",
-        "info": "Bagian inti fitur Video Generation (AnimateDiff). Ringan & "
-        "cepat, cocok untuk GPU 4 GB. Output 512x512, 16 frame. Wajib "
-        "dipasang bersama 'CLIP Vision'.",
-        "script": "dl_model.ps1",
-        "script_args": [
-            "-RepoId", "guoyww/animatediff-motion-adapter-v1-5-2",
-            "-Base", "server\\storage\\generate\\video\\animatediff",
-            "-Folder", "motion-adapter",
-            "-KeepRoot",
-            "-Exclude", "diffusion_pytorch_model.safetensors,README.md,.gitattributes",
-        ],
+        "id": "animate_diff",
+        "name": "AnimateDiff",
+        "description": "Model video AnimateDiff (~3,5 GB) — motion adapter + CLIP Vision untuk video pendek dari model SD 1.5.",
+        "info": "Gabungan motion adapter (v1-5-2) dan CLIP Vision ViT-Large/14. Ringan & cepat, cocok untuk GPU 4 GB. Output 512x512, 16 frame. Folder: animate-diff/.",
+        "script": "dl_animatediff.ps1",
         "category": "model_video",
-        "total_bytes": AD_MOTION_TOTAL,
-        "check_dir": AD_MOTION_DIR,
-        "check_files": {"diffusion_pytorch_model.fp16.safetensors": AD_MOTION_TOTAL},
-        "needs_python": False,
-    },
-    {
-        "id": "ad_clip",
-        "name": "Model CLIP Vision AnimateDiff",
-        "description": "Encoder citra CLIP ViT-Large/14 (~1,7 GB) sebagai "
-        "pelengkap motion adapter AnimateDiff v2.",
-        "info": "Dipakai motion module AnimateDiff v1-5-2 untuk memahami citra "
-        "tiap frame. Wajib ada bareng 'Motion Adapter AnimateDiff'.",
-        "script": "dl_model.ps1",
-        "script_args": [
-            "-RepoId", "openai/clip-vit-large-patch14",
-            "-Base", "server\\storage\\generate\\video\\animatediff",
-            "-Folder", "clip-vit-large",
-            "-KeepRoot",
-            "-Exclude", "pytorch_model.bin,flax_model.msgpack,tf_model.h5,README.md,.gitattributes",
-        ],
-        "category": "model_video",
-        "total_bytes": AD_CLIP_TOTAL,
-        "check_dir": AD_CLIP_DIR,
-        "check_files": {"model.safetensors": AD_CLIP_TOTAL},
+        "total_bytes": AD_MOTION_TOTAL + AD_CLIP_TOTAL,
+        "check_dir": ANIMATEDIFF_DIR,
+        "check_files": {
+            "motion-adapter/diffusion_pytorch_model.fp16.safetensors": AD_MOTION_TOTAL,
+            "clip-vit-large/model.safetensors": AD_CLIP_TOTAL,
+        },
         "needs_python": False,
     },
     {
         "id": "wan_t2v_13b",
-        "name": "Model Wan 2.1 T2V 1.3B",
-        "description": "Model video ringan Wan 2.1 dari Alibaba (~28 GB, "
+        "name": "Wan 2.1 T2V 1.3B",
+        "description": "Model video Wan 2.1 dari Alibaba (~28 GB, "
         "layout diffusers). Kualitas gerak lebih baik dari AnimateDiff.",
         "info": "Butuh unduhan besar (~28 GB) & RAM 24 GB+; di GPU 4 GB "
         "berjalan dengan offload ke RAM jadi lambat. Pilih ini kalau ingin "
@@ -292,8 +265,8 @@ TASKS = [
         "script": "dl_model.ps1",
         "script_args": [
             "-RepoId", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
-            "-Base", "server\\storage\\generate\\video\\wan",
-            "-Folder", "t2v-1.3b",
+            "-Base", "server\\storage\\generate\\video",
+            "-Folder", "wan",
             "-Exclude", "*.jpg,*.JPG,*.jpeg,*.png,*.md,.gitattributes",
         ],
         "category": "model_video",
@@ -760,6 +733,41 @@ def _run_script(job: SetupJob, script: Path, args: list[str]) -> None:
         job._pid = handle.pid
         job._proc = handle
     _persist_job(job)
+
+    # Poll disk for live progress, ETA and speed (especially for large video models where WAVES:PROGRESS may lag)
+    def _poll_disk():
+        last_done = job.done_bytes
+        last_time = time.time()
+        while True:
+            time.sleep(2)
+            with store._lock:
+                if job._finished or handle.poll() is not None:
+                    break
+                try:
+                    st = _task_state(job.task_id)
+                    now = time.time()
+                    # Update done_bytes from disk if larger
+                    if st["done_bytes"] > job.done_bytes:
+                        # Calculate rate from disk delta
+                        dt = now - last_time
+                        if dt > 0:
+                            inst = (st["done_bytes"] - last_done) / dt
+                            if inst > 0:
+                                job._rate = inst if job._rate <= 0 else job._rate * 0.6 + inst * 0.4
+                        job.done_bytes = st["done_bytes"]
+                        job.total_bytes = st["total_bytes"] or job.total_bytes
+                        if job.total_bytes:
+                            job.progress = round(100.0 * job.done_bytes / job.total_bytes, 1)
+                            if job.progress >= 100:
+                                job.progress = 99.0
+                        # Update ETA from rate
+                        if job._rate and job._rate > 1024 and job.total_bytes:
+                            job.eta_seconds = max(job.total_bytes - job.done_bytes, 0) / job._rate
+                        last_done = st["done_bytes"]
+                        last_time = now
+                except Exception:
+                    pass
+    threading.Thread(target=_poll_disk, daemon=True).start()
 
     last_progress = 0.0
     for raw in handle.stdout:
