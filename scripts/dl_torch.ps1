@@ -1,3 +1,9 @@
+<#
+.SYNOPSIS
+.DESCRIPTION
+.PARAMETER PythonPath
+.PARAMETER Install
+#>
 param(
   [string]$PythonPath = "",
   [switch]$Install
@@ -5,14 +11,21 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-# ---------- Anchor path ke root proyek ----------
+# ---------------------------------------------------------------------------
+# Tentukan root proyek dan direktori penyimpanan wheel.
+# ---------------------------------------------------------------------------
+# Wheel 2.6GB disimpan di server/storage/torch/ agar tidak di-cache torch hub 
+# tapi tetap persisten dan di-ignore git. New-Item -Force memastikan folder ada sebelum curl.
 $PSScriptRootResolved = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRootResolved "..")).Path
 $dir = Join-Path $projectRoot "server\storage\torch"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
-# url  = rangkaian curl (with resume manual via -C -).
-# torchaudio 2.11.0 = versi yang tersedia & cocok dengan wheel torch 2.14.0 di mirror Aliyun.
+# ---------------------------------------------------------------------------
+# Daftar wheel yang harus ada out, size, dan url mirror Aliyun.
+# ---------------------------------------------------------------------------
+# torchaudio 2.11.0+cu126 adalah pasangan yang cocok untuk torch 2.14.0+cu126,
+# versi lain mismatch dan gagal import. Mirror mengurangi 429 dibanding download.pytorch.org.
 $jobs = @(
   @{ out = Join-Path $dir "torchaudio-2.11.0+cu126-cp313-cp313-win_amd64.whl"; size = 1519625;
      url = "https://mirrors.aliyun.com/pytorch-wheels/cu126/torchaudio-2.11.0%2Bcu126-cp313-cp313-win_amd64.whl" },
@@ -39,7 +52,11 @@ function Get-DoneTotal {
   return $done
 }
 
-# ---------- Unduh satu wheel (resume + chunk ~30 detik untuk progres) ----------
+# ---------------------------------------------------------------------------
+# Invoke-WheelDownload, unduh satu wheel dengan resume dan chunk 30 detik.
+# ---------------------------------------------------------------------------
+# Wheel 2.6GB tanpa resume harus ulang dari nol bila putus di 99%. 
+# Loop curl -C - --max-time 30, cek Get-Len, kirim WAVES:PROGRESS, retry bila belum lengkap.
 function Invoke-WheelDownload($def) {
   $out = $def.out
   $size = [long]$def.size
@@ -52,7 +69,7 @@ function Invoke-WheelDownload($def) {
       return
     }
 
-    # satu iterasi curl maks ~30 detik; "-C -" => lanjut byte yang belum ada
+    # Apa: Satu iterasi curl max 30 detik; `-C -` = lanjut byte yang belum ada.
     curl.exe --show-error -L -C - --retry 999 --retry-delay 5 --max-time 30 -o $out $def.url
     $cur = Get-Len $out
 
@@ -72,17 +89,22 @@ function Invoke-WheelDownload($def) {
 }
 
 # =====================================================================
-#  Bagian 1 — unduh torch & torchaudio
+#  Bagian untuk unduh torch & torchaudio
 # =====================================================================
+# Iterasi semua wheel dan panggil Invoke-WheelDownload. 
+# Torchaudio kecil dulu memberi feedback cepat bahwa koneksi OK sebelum unduh 2.6GB.
 foreach ($j in $jobs) {
   Write-Output ("WAVES:STAGE Mengunduh {0}" -f (Split-Path $j.out -Leaf))
   Invoke-WheelDownload $j
 }
 
 # =====================================================================
-#  Bagian 2 — install torch & torchaudio
-#  Selalu ke venv proyek (backend) + ke Python pilihan user (jika beda).
+#  Bagian untuk install torch & torchaudio ke venv proyek dan Python pilihan user.
 # =====================================================================
+# Backend jalan dari venv, jadi torch wajib ada di sana. 
+# Deteksi venvPy dari 2 kandidat, gabung dengan PythonPath menjadi targets unik, 
+# pip install --no-cache-dir tiap target agar tidak gandakan disk 2.6GB, 
+# lalu verifikasi torch.cuda.is_available() supaya tahu GPU terdeteksi.
 if ($Install) {
   if (-not $PythonPath) {
     Write-Output "WAVES:ERROR -Install dipakai tapi -PythonPath kosong (target python wajib diisi)."
@@ -95,7 +117,7 @@ if ($Install) {
 
   Write-Output "WAVES:STAGE Menyiapkan target install..."
 
-  # Target 1: venv proyek (yang menjalankan backend Waves) — SELALU dipasang.
+  # Cari venv proyek selalu dipasang, bukan opsional.
   $venvPy = $null
   foreach ($cand in @(
     (Join-Path $projectRoot ".venv\Scripts\python.exe"),
@@ -108,7 +130,7 @@ if ($Install) {
     exit 1
   }
 
-  # Target 2: Python pilihan user (kalau sama dengan venv, jangan dua kali).
+  # Gabung target dan hindari install dua kali bila user pilih venv yang sama.
   $targets = @($PythonPath)
   if ($venvPy -notin $targets) { $targets += $venvPy }
 
@@ -123,7 +145,7 @@ if ($Install) {
       exit $LASTEXITCODE
     }
 
-    # verifikasi import supaya tahu GPU di aktifkan atau tidak
+    # Verifikasi import torch dan cek CUDA agar tahu GPU terdeteksi atau fallback CPU.
     $check = & $t -c "import torch; print('cuda=' + str(torch.cuda.is_available()))" 2>&1
     Write-Output ("WAVES:LOG verifikasi ({0}): {1}" -f $envName, ($check -join " | "))
   }

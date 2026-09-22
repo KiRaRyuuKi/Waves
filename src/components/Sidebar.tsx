@@ -359,7 +359,7 @@ export default function Sidebar() {
             aria-hidden
           >
             <img
-              src="/monokuma.gif"
+              src="/pixel-monokuma.gif"
               alt=""
               width={180}
               height={56}

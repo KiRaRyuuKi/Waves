@@ -15,9 +15,17 @@ import { fileURLToPath } from "node:url";
 import readline from "node:readline/promises";
 import { emitKeypressEvents } from "node:readline";
 
+// ---------------------------------------------------------------------------
+// Konstanta global & path
+// ---------------------------------------------------------------------------
+// Tentukan root proyek, platform, versi, port, dan lokasi state/logs.
+// Semua path harus absolut dari posisi file ini agar konsisten di Windows 
+// dan Unix serta tidak bergantung pada cwd saat npm run waves dipanggil.
+// ROOT dihitung dari import.meta.url, IS_WIN untuk branching Windows,
+// STATE_DIR/LOG_DIR untuk PID dan log, path.resolve menjamin root benar.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const IS_WIN = platform() === "win32";
-const VERSION = "0.1.5-alpha";
+const VERSION = "1.1.5-preview";
 
 const FE_PORT = process.env.FRONTEND_PORT || "3095";
 const BE_PORT = process.env.BACKEND_PORT || "9035";
@@ -28,7 +36,8 @@ const STATE_DIR = path.join(ROOT, ".waves");
 const STATE_FILE = path.join(STATE_DIR, "state.json");
 const LOG_DIR = path.join(STATE_DIR, "logs");
 
-// Tema monocrom: hanya reset/bold/dim — tanpa warna.
+// Palet warna monokrom untuk log terminal, hanya reset/bold/dim tanpa warna mencolok agar tetap terbaca di terminal minim warna, 
+// tidak mengotori log file, dan konsisten dengan tema TUI. Kode ANSI dipakai manual dan terminal Windows lama terhindar dari garbled escape sequence.
 const C = {
   reset: "\x1b[0m",
   bold: "\x1b[1m",
@@ -57,15 +66,21 @@ function fatal(msg) {
   exitWith(1);
 }
 
-// Keluar dengan jeda singkat: memaksa process.exit() saat undici/stdout masih
-// menutup handle di Windows memicu crash libuv (UV_HANDLE_CLOSING, async.c).
+// Keluar dengan jeda 150ms alih-alih process.exit langsung. 
+// Di Windows undici/stdout masih menutup handle async saat exit dipanggil, 
+// libuv bisa melempar UV_HANDLE_CLOSING dan proses terlihat crash padahal server sudah berhasil di-spawn. 
+// setTimeout memberi waktu merapikan handle.
 function exitWith(code) {
   setTimeout(() => process.exit(code), 150);
 }
 
 // ---------------------------------------------------------------------------
-//  Argument parsing
+// Penguraian argumen CLI
 // ---------------------------------------------------------------------------
+// Baca flag --mode=, --action=, --yes, --no-browser dari process.argv untuk mode non-interaktif. 
+// Di TTY tampilkan menu panah, di CI atau tombol sidebar tidak ada interaksi sehingga flag jadi fallback. 
+// strArg mencari --name=value,
+// TTY mengecek stdin.isTTY dan CI, tanpa guard ini select akan hang menunggu keypress yang tidak pernah datang.
 const args = process.argv.slice(2);
 const strArg = (name) =>
   (
@@ -78,8 +93,17 @@ const NO_BROWSER = args.includes("--no-browser");
 const TTY = process.stdin.isTTY === true && !process.env.CI;
 
 // ---------------------------------------------------------------------------
-//  State (PID management)
+// Manajemen state PID (agar server bisa di-stop/restart dari UI)
 // ---------------------------------------------------------------------------
+// `state.json` menyimpan `backendPid`, `frontendPid`, `mode`, port, 
+// dan `pythonPath` agar proses lain (sidebar, stop.mjs, restart.mjs) 
+// tahu PID mana yang harus di-kill.
+// Proses backend/frontend di-spawn `detached`, parent loader sudah exit, 
+// jadi satu-satunya cara melacak mereka adalah file state.
+// `readState()` parse JSON dengan try/catch, `writeState()` buat direktori `.waves` dulu, 
+// `clearState()` hapus file saat stop.
+// File bisa korup/terpotong bila crash di tengah tulis `try/catch`
+// untuk mengembalikan `null` sehingga flow lanjut sebagai "tidak ada state".
 function readState() {
   try {
     return JSON.parse(readFileSync(STATE_FILE, "utf8"));
@@ -95,11 +119,17 @@ function clearState() {
   try {
     rmSync(STATE_FILE, { force: true });
   } catch {
-    /* abaikan */
+    /* abaikan, file mungkin sudah terhapus oleh stop.mjs */
   }
 }
 
-// Cek apakah PID masih hidup (Windows: tasklist; lain: process.kill(pid, 0)).
+// Mengecek apakah PID masih hidup.
+// State lama bisa tertinggal setelah crash listrik / `taskkill` gagal kita harus bedakan,
+// "state ada tapi proses mati" (boleh start baru) vs "proses masih hidup" (tolak start duplikat).
+// Windows pakai `tasklist /FI "PID eq N"` dan cek CSV output;
+// Unix pakai `process.kill(pid, 0)` yang tidak mengirim sinyal tapi throw bila PID tidak ada.
+// `tasklist` mengembalikan CSV dengan quote, jadi harus cek `"<pid>"` lowercase; 
+// di Unix, `kill` butuh handle `ESRCH` vs `EPERM`.
 function isPidAlive(pid) {
   if (!pid) return false;
   try {
@@ -119,8 +149,16 @@ function isPidAlive(pid) {
 }
 
 // ---------------------------------------------------------------------------
-//  Python / Node detection
+// Deteksi Python & Node
 // ---------------------------------------------------------------------------
+// Mencari interpreter Python di venv proyek terlebih dulu, baru fallback ke PATH sistem.
+// Waves wajib jalan di venv yang sama dengan `requirements.txt` 
+// agar `torch`, `demucs`, `fastapi` konsisten, 
+// `python` global sering versi berbeda dan menyebabkan `No module named 'demucs'`.
+// Cek berurutan `.venv/Scripts/python.exe` → `venv/...` 
+// → `.venv/bin/python` → `venv/bin/python`; return path pertama yang ada.
+// User kadang membuat venv dengan nama `venv` bukan `.venv`, 
+// dengan cek 4 kandidat kita toleran terhadap kedua kebiasaan.
 function venvPythonPath() {
   const candidates = [
     path.join(ROOT, ".venv", "Scripts", "python.exe"),
@@ -131,6 +169,12 @@ function venvPythonPath() {
   return candidates.find((p) => existsSync(p)) || null;
 }
 
+// Menjalankan command sinkron dengan `stdio: inherit` (output langsung ke terminal parent).
+// Untuk setup yang butuh interaksi (`npm install`, `pip install`)
+// kita ingin user melihat progress bar asli.
+// `spawnSync` dengan `shell: IS_WIN` agar `.cmd` di Windows tetap ditemukan.
+// `shell: true` di Unix bisa menimbulkan quoting issue,
+// karena kita hanya pakai untuk `npm`/`pip` yang sederhana, ini aman.
 function run(cmd, args = []) {
   const r = spawnSync(cmd, args, {
     cwd: ROOT,
@@ -141,12 +185,16 @@ function run(cmd, args = []) {
   return r.status ?? 1;
 }
 
+// Probe cepat apakah command ada / berhasil (tanpa output).
+// Untuk cek `python -c "import fastapi"` tanpa mengotori terminal.
+// `spawnSync` tanpa `stdio: inherit`, cek `status === 0`.
+// Bila python tidak ada, `spawnSync` return non-nol tanpa throw kita cukup return boolean.
 function probe(cmd, args) {
   return spawnSync(cmd, args, { cwd: ROOT, encoding: "utf-8" }).status === 0;
 }
 
 // ---------------------------------------------------------------------------
-//  Banner / TUI helpers
+// Banner & helper TUI (spinner, menu panah)
 // ---------------------------------------------------------------------------
 const ART = [
   "██╗    ██╗ █████╗ ██╗   ██╗███████╗███████╗",
@@ -162,8 +210,13 @@ const banner = () => {
   console.log("");
 };
 
-// Spinner sederhana (hanya dipakai saat TTY, jalur tunggu).
-// Setiap baris (frame maupun hasil akhir) selalu berawalan timestamp.
+// Spinner teks dengan timestamp untuk menunggu backend/frontend ready.
+// Health-check butuh waktu (uvicorn + Next.js compile), tanpa feedback visual user mengira hang.
+// `setInterval` tiap 90ms ganti frame braille `⠋⠙⠹...`; 
+// di TTY pakai `\x1b[1A\x1b[K` untuk overwrite baris yang sama, 
+// di non-TTY fallback ke `console.log` biasa.
+// Di Windows non-TTY (spawn dari frontend), escape sequence tidak diinterpretasi,
+// fallback `if (!TTY)` mencegah karakter aneh di log file.
 function spinner(text, tag = "") {
   const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
   let i = 0;
@@ -173,7 +226,7 @@ function spinner(text, tag = "") {
   const stop = (ok = true) => {
     clearInterval(timer);
     const mark = ok ? C.green + "✓" + C.reset : C.red + "✗" + C.reset;
-    // Tampa \x1b[1A: frame terakhir tetap terlihat, ✓ berada di baris baru.
+    // Tanpa \x1b[1A: frame terakhir tetap terlihat, ✓ berada di baris baru.
     process.stdout.write(`${prefix()} ${mark}  ${text}\n`);
   };
   if (!TTY)
@@ -190,16 +243,15 @@ function spinner(text, tag = "") {
   return { set, stop };
 }
 
-// Menu interaktif (panah atas/bawah + Enter). Hanya berfungsi di TTY.
 function select(title, options, hint) {
   if (!TTY) return options[0].id;
-  const lines = 1 + options.length * 2 + 2; // judul + 2 baris/opsi + hint + baris kosong
+  const lines = 1 + options.length * 2 + 2;
 
   const printBlock = () => {
     console.log(`${C.bold}${title}${C.reset}`);
     options.forEach((o, i) => {
       const sel = i === cursor;
-      const cursorMark = sel ? `${C.cyan}~>${C.reset} ` : "   "; // lebar 3 supaya nama sejajar
+      const cursorMark = sel ? `${C.cyan}~>${C.reset} ` : "   ";
       const bullet = sel ? `${C.bold}●${C.reset}` : `${C.dim}  ○${C.reset}`;
       const name = o.label;
       console.log(` ${cursorMark}${bullet} ${name}`);
@@ -253,8 +305,17 @@ function select(title, options, hint) {
 }
 
 // ---------------------------------------------------------------------------
-//  Setup awal (venv + requirements + node_modules)
+// Setup awal (venv + requirements + node_modules)
 // ---------------------------------------------------------------------------
+// Memastikan environment siap sebelum spawn, cek `node_modules/next`,
+// buat `.venv` bila belum ada, dan install `requirements.txt`.
+// Instalasi pertama kali sering gagal karena user lupa `npm install`
+// atau venv belum dibuat, tanpa guard ini, uvicorn akan langsung error
+// `No module named fastapi` yang membingungkan.
+// Gunakan `existsSync` untuk deteksi, `readline` untuk konfirmasi
+// `[Y/n]`, dan `ASSUME_YES` untuk skip bila `--yes` atau non-TTY.
+// `confirm()` harus handle `Ctrl+C` dan input kosong (default Y)
+// regex `/^n/i` hanya menolak bila user eksplisit ketik `n`.
 async function ensureSetup() {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -330,18 +391,26 @@ async function ensureSetup() {
 }
 
 // ---------------------------------------------------------------------------
-//  Spawn (selalu detached + log ke file) dan tunggu siap
+// Spawn (selalu detached + log ke file) dan tunggu siap
 // ---------------------------------------------------------------------------
+// Mem-spawn proses anak yang hidup independen dari parent.
+// Loader `start.mjs` harus exit setelah spawn agar terminal tidak terblokir, 
+// tapi backend/frontend harus tetap jalan — `detached: true` + `unref()` membuat mereka jadi daemon.
+// Buka fd file log dengan `openSync(logFile,"a")`, 
+// lalu `spawn(cmd,args,{detached:true, windowsHide:true, stdio:["ignore",fd,fd]})`.
+// Jika pakai `stdio:"pipe"` dan parent exit, pipe pecah dan libuv crash. 
+// Dengan fd file langsung, tidak ada pipe yang perlu ditutup parent.
 function spawnBackground(cmd, args, logFile) {
   mkdirSync(LOG_DIR, { recursive: true });
   // Redirect stdout/stderr langsung ke file (fd) tanpa pipe di parent.
-  // Pipe lewat parent memacu crash libuv (UV_HANDLE_CLOSING) saat
-  // process.exit() dan memperlambat server karena backpressure.
+  // Pipe lewat parent memacu crash libuv (UV_HANDLE_CLOSING) saat process.exit() dan memperlambat server karena backpressure.
+  // `openSync` lalu `stdio: ["ignore", fd, fd]`.
   const fd = openSync(logFile, "a");
   const child = spawn(cmd, args, {
     cwd: ROOT,
-    // detached membuat anak bertahan setelah loader keluar. windowsHide +
-    // stdio langsung ke file mencegah jendela console baru di Windows.
+    // `detached` membuat anak bertahan setelah loader keluar. 
+    // `windowsHide` mencegah jendela console baru di Windows, `stdio` langsung ke file.
+    // Tanpa ini, menutup terminal loader akan ikut kill anak.
     detached: true,
     windowsHide: true,
     stdio: ["ignore", fd, fd],
@@ -351,16 +420,21 @@ function spawnBackground(cmd, args, logFile) {
   return child;
 }
 
-// python.exe selalu subsystem console (bisa kelihatan sebagai jendela baru
-// tergantung terminal host-nya). pythonw.exe adalah build Windows yang
-// memang tidak pernah punya console sama sekali — dipakai khusus untuk
-// proses backend yang di-spawn di background.
+// Mengubah `python.exe` menjadi `pythonw.exe` bila ada (hanya Windows).
+// `python.exe` adalah subsystem console, kadang memunculkan flash jendela hitam sesaat saat di-spawn. 
+// `pythonw.exe` adalah build tanpa console sama sekali, cocok untuk daemon.
+// Ganti suffix `python.exe` → `pythonw.exe` dan cek `existsSync`.
+// Tidak semua distribusi Python menyertakan `pythonw.exe`, fallback ke `python.exe` bila tidak ditemukan.
 function toPythonw(pyPath) {
   if (!IS_WIN) return pyPath;
   const w = pyPath.replace(/python\.exe$/i, "pythonw.exe");
   return existsSync(w) ? w : pyPath;
 }
 
+// Membuka browser ke FE_URL setelah server siap.
+// UX user tidak perlu manual ketik `http://localhost:3095`.
+// Windows pakai `cmd /c start "" <url>`, Unix pakai `xdg-open`.
+// Di mode `Background` atau `--no-browser` kita skip sama sekali.
 function openBrowser() {
   if (NO_BROWSER) return;
   try {
@@ -374,10 +448,17 @@ function openBrowser() {
       spawn("xdg-open", [FE_URL], { detached: true, stdio: "ignore" }).unref();
     }
   } catch {
-    /* abaikan */
+    /* abaikan jika gagal buka browser bukan fatal, user bisa buka manual */
   }
 }
 
+// Polling HTTP sampai `url` merespons 200 OK atau timeout.
+// Uvicorn/Next butuh beberapa detik untuk bind port dan tanpa tunggu,
+// browser terbuka terlalu cepat dan menampilkan `ERR_CONNECTION_REFUSED`.
+// Loop `fetch` tiap 700ms, update spinner dengan elapsed seconds,
+// resolve `true` jika `r.ok`, `false` bila lewat `timeoutMs`.
+// `fetch` bisa throw `ECONNREFUSED` sebelum server bind,
+// `catch(retry)` memastikan retry terus, bukan langsung gagal.
 function waitHttpReady(url, label, timeoutMs = 60000) {
   const start = Date.now();
   const pad = label.padEnd(23);
@@ -407,7 +488,11 @@ function waitHttpReady(url, label, timeoutMs = 60000) {
   });
 }
 
-// Tunggu backend benar-benar merespons sebelum browser dibuka.
+// Wrapper khusus untuk menunggu backend `/api/health`.
+// Frontend proxy `/api/*` ke backend, jika backend belum ready, frontend akan 502. 
+// Kita harus pastikan backend dulu baru frontend.
+// Panggil `waitHttpReady` dengan path health dan timeout 120s.
+// Cold start model (torch) bisa >60s di HDD, timeout 120s memberi ruang lebih.
 function waitBackendReady(timeoutMs = 120000) {
   return waitHttpReady(
     BE_URL + "/api/health",
@@ -416,14 +501,22 @@ function waitBackendReady(timeoutMs = 120000) {
   );
 }
 
-// Tunggu frontend benar-benar merespons sebelum browser dibuka.
+// Wrapper untuk menunggu frontend `/` ready.
+// Next.js dev butuh compile awal, start butuh load `.next`,
+// sama seperti backend, perlu health-check sebelum buka browser.
 function waitFrontendReady(timeoutMs = 120000) {
   return waitHttpReady(FE_URL, "Menunggu frontend siap", timeoutMs);
 }
 
 // ---------------------------------------------------------------------------
-//  Main
+// Main orkestrasi keseluruhan
 // ---------------------------------------------------------------------------
+// Fungsi utama yang menggabungkan semua langkah: cek state lama, pilih interface/mode, 
+// setup, spawn backend/frontend, simpan state, dan buka browser.
+// Satu tempat untuk urutan yang benar, urutan salah (mis. spawn frontend sebelum backend ready) menyebabkan race condition proxy.
+// Cek `readState()` + `isPidAlive()` dulu, lalu `banner()`, `select()` untuk action/mode, `ensureSetup()`, 
+// cek `BUILD_ID` untuk mode start, `spawnBackground()` untuk kedua server, `waitBackendReady()` → `waitFrontendReady()` → `openBrowser()`.
+// State stale harus dibersihkan sebelum lanjut; mode `dev` tidak butuh build sedangkan `start` wajib dan beda handlingnya.
 async function main() {
   const existing = readState();
   if (existing) {
@@ -559,7 +652,8 @@ async function main() {
   );
   INFO(`backend  pid ${backend.pid}`);
 
-  // Tunggu backend siap dulu sebelum memicu frontend
+  // Tunggu backend siap dulu sebelum memicu frontend.
+  // Menghindari race di mana Next proxy /api/* ke backend yang belum bind ke health-check sequential memastikan urutan benar.
   const beReady = await waitBackendReady();
 
   // ---- frontend ----
@@ -571,7 +665,8 @@ async function main() {
   );
   INFO(`frontend pid ${frontend.pid}`);
 
-  // simpan state PID
+  // Simpan PID ke state agar bisa di-stop/restart dari UI.
+  // Tanpa file, tombol di sidebar tidak tahu PID mana yang harus di-kill — state jadi sumber kebenaran tunggal.
   writeState({
     mode,
     pythonPath: py,
@@ -582,7 +677,9 @@ async function main() {
     startedAt: new Date().toISOString(),
   });
 
-  // tunggu backend siap lalu frontend, baru buka browser
+  // Tunggu backend lalu frontend, baru buka browser.
+  // Memberi kepastian user melihat halaman sudah ready,
+  // bukan `ERR_CONNECTION_REFUSED` sesaat.
   const feReady = beReady ? await waitFrontendReady() : false;
 
   if (beReady && feReady) {

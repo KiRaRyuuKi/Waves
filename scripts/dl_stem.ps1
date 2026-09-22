@@ -1,3 +1,8 @@
+<#
+.SYNOPSIS
+.DESCRIPTION
+.PARAMETER Model
+#>
 param(
   [ValidateSet("htdemucs", "htdemucs_ft", "mdx_extra")]
   [string]$Model = "htdemucs"
@@ -5,15 +10,22 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-# ---------- Target: cache torch hub (folder yang dibaca Demucs) ----------
+# ---------------------------------------------------------------------------
+# Tentukan direktori cache torch hub dan lokasi yang dibaca Demucs secara native.
+# ---------------------------------------------------------------------------
+# Demucs tidak mencari di server/storage/ tapi di ~/.cache/torch/hub/checkpoints/.
+# Salah folder membuat Demucs tetap coba unduh ulang meski file sudah ada.
+# Join-Path $HOME bersama New-Item -Force memastikan folder ada sebelum curl.
 $cacheDir = Join-Path $HOME ".cache\torch\hub\checkpoints"
 New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
 $baseUrl = "https://dl.fbaipublicfiles.com/demucs"
 
-# Bobot pre-trained Demucs. `name` = nama file di cache torch hub (harus
-# sama persis agar ditemukan tanpa diunduh ulang oleh demucs). `url` =
-# path relatif ke server fbaipublicfiles.
+# ---------------------------------------------------------------------------
+# Tabel job di setiap entri berisi name, url, dan size untuk verifikasi.
+# ---------------------------------------------------------------------------
+# Nama file hash adalah kunci cache, size dipakai untuk hitung KNOWN_TOTAL dan WAVES:PROGRESS. 
+# htdemucs_ft butuh 4 file, jika salah jumlah model tetap dianggap belum terpasang oleh separator.
 $jobs = @{
   htdemucs = @(
     @{ name = "955717e8-8726e21a.th"; url = "hybrid_transformer/955717e8-8726e21a.th"; size = 84141911 }
@@ -32,15 +44,26 @@ $jobs = @{
   )
 }[$Model]
 
+# Hitung total bytes untuk model terpilih agar WAVES:PROGRESS bisa hitung persen dan ETA.
 $knownTotal = 0L
 foreach ($j in $jobs) { $knownTotal += [long]$j.size }
 
+# ---------------------------------------------------------------------------
+# Get-Len, cek ukuran file yang sudah ada (0 bila belum).
+# ---------------------------------------------------------------------------
+# Untuk resume kita perlu tahu cur bytes agar curl -C - lanjut dari posisi yang
+# benar dan tidak mengunduh ulang dari nol.
 function Get-Len([string]$path) {
   $f = Get-Item $path -ErrorAction SilentlyContinue
   if ($null -eq $f) { return 0L }
   return [long]$f.Length
 }
 
+# ---------------------------------------------------------------------------
+# Get-DoneTotal, hitung total bytes yang sudah terunduh.
+# ---------------------------------------------------------------------------
+# Clamp ke size bila kelebihan byte karena retry, agar done tidak melebihi total
+# dan bar progress tidak lewat 100%.
 function Get-DoneTotal {
   $done = 0L
   foreach ($j in $jobs) {
@@ -51,7 +74,13 @@ function Get-DoneTotal {
   return $done
 }
 
-# ---------- Unduh satu checkpoint (resume + chunk pendek agar progres live) ----------
+# ---------------------------------------------------------------------------
+# Invoke-CheckpointDownload, unduh satu checkpoint dengan resume dan chunk pendek.
+# ---------------------------------------------------------------------------
+# File 80-167MB jika curl sekali jalan tanpa chunk, UI hanya update setelah
+# selesai dan terlihat hang. Loop cek cur, kirim WAVES:PROGRESS tiap 1 detik,
+# lalu curl -C - --max-time 5 selama 5 detik, sleep 200ms dan ulang. Pakai
+# curl.exe native karena Invoke-WebRequest lambat saat stdout di-redirect.
 function Invoke-CheckpointDownload($def) {
   $out = Join-Path $cacheDir $def.name
   $size = [long]$def.size
@@ -66,15 +95,14 @@ function Invoke-CheckpointDownload($def) {
       return
     }
 
-    # Report progres tiap ~1 detik supaya UI live (bar naik terus).
+    # Report progres tiap 1 detik supaya bar di SetupModal naik terus dan user dapat feedback konstan.
     if ((Get-Date).AddMilliseconds(-1000) -ge $lastUpdate) {
       $done = Get-DoneTotal
       Write-Output ("WAVES:PROGRESS {0} {1}" -f $done, $knownTotal)
       $lastUpdate = Get-Date
     }
 
-    # Unduh dalam chunk pendek (~5 detik) + resume, supaya progres bisa
-    # dilaporkan di antara chunk, bukan baru setelah file penuh.
+    # Unduh dalam chunk pendek 5 detik dengan resume agar WAVES:PROGRESS bisa dilaporkan di antara chunk.
     if ((Get-Date) -ge $nextRun) {
       $nextRun = (Get-Date).AddMilliseconds(5500)
       curl.exe --no-progress-meter --show-error -L -C - --max-time 5 -o $out "$baseUrl/$($def.url)"
@@ -94,12 +122,18 @@ function Invoke-CheckpointDownload($def) {
   }
 }
 
-# ---------- Proses ----------
+# ---------------------------------------------------------------------------
+# Proses utama untuk iterasi semua file dalam jobs untuk model terpilih.
+# ---------------------------------------------------------------------------
+# Satu model bisa 1 atau 4 file, harus semua lengkap sebelum Demucs bisa dipakai.
 Write-Output ("WAVES:STAGE Mengunduh bobot Demucs ({0})..." -f $Model)
 foreach ($j in $jobs) {
   Invoke-CheckpointDownload $j
 }
 
+# Verifikasi dan pastikan semua file ukurannya sesuai ekspektasi.
+# File setengah terunduh tidak boleh dianggap sukses, tanpa cek ini separator.py
+# akan error unexpected EOF saat load checkpoint.
 Write-Output "WAVES:STAGE Verifikasi file..."
 $missing = @($jobs | Where-Object { (Get-Len (Join-Path $cacheDir $_.name)) -lt [long]$_.size })
 if ($missing.Count -gt 0) {

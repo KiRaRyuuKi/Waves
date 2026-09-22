@@ -59,7 +59,9 @@ export default function ServerControl() {
   async function act(action: "start" | "restart" | "stop") {
     setBusy(action);
     try {
-      await fetch(`/api/control/${action === "start" ? "restart" : action}`, { method: "POST" });
+      await fetch(`/api/control/${action === "start" ? "restart" : action}`, {
+        method: "POST",
+      });
       if (action === "stop") setOpen(false);
       setTimeout(
         () => setState((s) => ({ ...s, running: action !== "stop" })),
@@ -84,7 +86,7 @@ export default function ServerControl() {
             ? "Server berjalan — klik untuk menu"
             : "Server belum berjalan"
         }
-        className={`relative flex h-[38px] w-[38px] items-center justify-center rounded-md border transition-colors ${
+        className={`relative flex h-[38px] w-[38px] pl-1 items-center justify-center rounded-md border transition-colors ${
           state.running
             ? "border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"
             : "border-edge bg-white text-ink-subtle hover:bg-canvas-subtle"
@@ -104,9 +106,12 @@ export default function ServerControl() {
           <path d="M12 2v9" />
           <path d="M18.36 6.64a9 9 0 1 1-12.72 0" />
         </svg>
-        <span
-          className={`absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full ${state.running ? "bg-red-500" : "bg-gray-500"}`}
-        />
+        <span className="absolute right-1 top-1 flex h-1.5 w-1.5">
+          <span
+            className={`absolute -right-0 -top-0 h-1.5 w-1.5 rounded-full ${state.running ? "bg-red-500" : "bg-gray-500"}`}
+          />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+        </span>
       </button>
 
       {open && (

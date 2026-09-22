@@ -2,12 +2,16 @@
   "name": "waves",
   "private": true,
   "version": "1.1.5-preview",
+  "bin": {
+    "waves": "./bin/waves.js"
+  },
   "scripts": {
     "dev": "next dev -p 3095",
     "start": "next start -p 3095",
     "build": "next build",
     "lint": "next lint",
-    "waves": "node scripts/start.mjs",
+    "waves": "node bin/waves.js",
+    "waves:dev": "node scripts/start.mjs",
     "stop": "node scripts/stop.mjs",
     "restart": "node scripts/restart.mjs"
   },

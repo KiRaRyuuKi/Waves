@@ -1,16 +1,27 @@
+<#
+.SYNOPSIS
+.DESCRIPTION
+.PARAMETER RepoId
+.PARAMETER Exclude
+.PARAMETER Folder
+.PARAMETER Base
+.PARAMETER KeepRoot
+.PARAMETER Test
+#>
+
 param(
   [Parameter(Mandatory=$true)]
   [string]$RepoId,
-  # Satu string, pola dipisah koma/titik-koma. (PowerShell -File tidak bisa
-  # mengikat parameter array, jadi jangan pakai [string[]] di sini.)
+  # Satu string, pola dipisah koma/titik-koma. 
+  # (PowerShell -File tidak bisa mengikat parameter array, jadi jangan pakai [string[]] di sini.)
   [string]$Exclude = "",
-  # Nama folder tujuan di server/storage/<Base>/<Folder>/. Default: segmen
-  # terakhir RepoId (mis. 'Lykon/DreamShaper' -> 'DreamShaper'). Override
-  # dipakai untuk nama folder yang konsisten di storage.
+  # Nama folder tujuan di server/storage/<Base>/<Folder>/. 
+  # Default segmen terakhir RepoId (mis. 'Lykon/DreamShaper' -> 'DreamShaper'). 
+  # Override dipakai untuk nama folder yang konsisten di storage.
   [string]$Folder = "",
-  # Root tujuan relatif project root (mis. 'server\storage\generate\video'). Default
-  # 'server\storage\generate\image' (model gambar). Dipakai task model video agar
-  # terunduh ke storage/generate/video/ tanpa mengotori folder image SD.
+  # Root tujuan relatif project root (mis. 'server\storage\generate\video'). 
+  # Default 'server\storage\generate\image' (model gambar). Dipakai task model video agar
+  # terunduh ke storage/generate/video/.
   [string]$Base = "server\storage\generate\image",
   # Ikut sertakan file BUKAN .json di root repo (mis. checkpoint .safetensors
   # yang persis di root, khas repo transformers/CLIP & motion module).
@@ -29,7 +40,13 @@ $ProgressPreference = "SilentlyContinue"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
 
-# --- Koneksi check ke HuggingFace (dipakai semua model termasuk Wan & AnimateDiff) ---
+# ---------------------------------------------------------------------------
+# Test-HFConnection, mengecek apakah HuggingFace bisa dijangkau.
+# ---------------------------------------------------------------------------
+# Sebelum daftar file 100+ entri, kita harus tahu internet OK. Tanpa ini, Get-HFJson akan retry 10x sia-sia dan user menunggu lama tanpa feedback.
+# Coba Invoke-WebRequest ke huggingface.co (3x), fallback ke API bert-base-uncased; tiap gagal tulis WAVES:LOG dan sleep backoff.
+# Firewall sering blok huggingface.co tapi API tetap bisa fallback memastikan tidak false-negative.
+# ---------------------------------------------------------------------------
 function Test-HFConnection {
   param([int]$MaxAttempts = 3)
   for ($i = 1; $i -le $MaxAttempts; $i++) {
@@ -48,7 +65,7 @@ function Test-HFConnection {
   return $false
 }
 
-# --- Bundle AnimateDiff (+ Wan sudah via generic) : gabungan dari dl_animatediff.ps1 ---
+# --- Bundle AnimateDiff dan Wan ---
 $animateBundleIds = @("animatediff", "animatediff-bundle", "animate_diff", "animate-diff")
 if ($RepoId -in $animateBundleIds) {
   if ($Test) {
@@ -140,8 +157,14 @@ $baseUrl = "https://huggingface.co/$RepoId/resolve/main"
 # --- Fetch file tree recursively via HuggingFace API ---
 $script:hfFiles = @()
 
-# Panggil API HF dengan retry + backoff (429 Too Many Requests umum
-# untuk unduhan publik). Berhenti coba setelah 10 attempt.
+# ---------------------------------------------------------------------------
+# Get-HFJson, fetch JSON dari HuggingFace API dengan retry & backoff.
+# ---------------------------------------------------------------------------
+# HF sering 429 (rate-limit) untuk IP publik — tanpa backoff, script langsung throw dan download gagal.
+# Loop attempt 1..10, tangkap 429 → tunggu Retry-After atau 5*attempt, connection error → 5*attempt, else 2 detik; throw baru setelah 10x.
+# Invoke-RestMethod tanpa retry membuat unduh model 28GB gagal di 90% hanya karena 1 request 429 sesaat.
+# ---------------------------------------------------------------------------
+# Panggil API HF dengan retry + backoff (429 Too Many Requests umum untuk unduhan publik). Berhenti coba setelah 10 attempt.
 function Get-HFJson([string]$url) {
   $attempt = 0
   while ($true) {
@@ -167,6 +190,16 @@ function Get-HFJson([string]$url) {
   }
 }
 
+# ---------------------------------------------------------------------------
+# Get-HFFiles, rekursif mengambil daftar file dari repo HuggingFace.
+# ---------------------------------------------------------------------------
+# Repo diffusers punya tree dalam (scheduler/, vae/, unet/), 
+# harus di-crawl rekursif untuk dapat semua *.json/*.safetensors.
+# GET /api/models/<RepoId>/tree/main/<apiPath>, iterasi item;
+# jika file & size>0 & tidak di-exclude → tambah ke $hfFiles, 
+# jika directory → sleep 400ms lalu rekursi.
+# Tanpa filter root non-json, file 4GB di root ikut terunduh padahal hanya butuh model_index.json.
+# ---------------------------------------------------------------------------
 function Get-HFFiles([string]$apiPath) {
   $url = "https://huggingface.co/api/models/$RepoId/tree/main/$apiPath"
   try {
@@ -183,7 +216,7 @@ function Get-HFFiles([string]$apiPath) {
       $skip = $false
       # Di root repo, hanya ambil file konfigurasi; lewati checkpoint/ckpt-
       # safetensors raksasa & gambar yang biasanya cuma pelengkap di root.
-      # (kecuali -KeepRoot disertakan — task yang butuh file non-json di root,
+      # (kecuali -KeepRoot disertakan, task yang butuh file non-json di root,
       # seperti motion module AnimateDiff & CLIP vision, memakainya.)
       if ($apiPath -eq "" -and $leaf -notlike "*.json" -and -not $KeepRoot) { $skip = $true }
       foreach ($pat in $excludePatterns) {
@@ -237,6 +270,14 @@ function Get-CurBytes {
   return $sum
 }
 
+# ---------------------------------------------------------------------------
+# Invoke-ChunkedDownload, unduh satu file dengan resume & progress live.
+# ---------------------------------------------------------------------------
+# File *.safetensors 2-4GB, tanpa resume, putus di 99% harus ulang dari nol. 
+# Tanpa progress tiap detik, UI terlihat hang.
+# Loop cek Get-Len(cur) < size → WAVES:PROGRESS tiap 1s → curl -C --retry 999 --speed-time 60. Break bila curl exit 0.
+# curl tanpa --speed-limit akan hang di koneksi lelet, speed-time memastikan retry bila throughput <1KB/s selama 60s.
+# ---------------------------------------------------------------------------
 function Invoke-ChunkedDownload($fileDef) {
   $out = Join-Path $root $fileDef.rel
   $size = $fileDef.size
@@ -244,7 +285,7 @@ function Invoke-ChunkedDownload($fileDef) {
   New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
 
   $attempts = 0
-    # Update total progress tiap detik supaya UI live
+    # Update total progress tiap detik
     $lastUpdate = 0
     while ($true) {
       $cur = Get-Len $out
@@ -265,6 +306,13 @@ function Invoke-ChunkedDownload($fileDef) {
   Write-Output ("WAVES:LOG selesai: {0}" -f $fileDef.rel)
 }
 
+# ---------------------------------------------------------------------------
+# Proses utama untuk iterasi semua file di $hfFiles dan panggil download.
+# ---------------------------------------------------------------------------
+# Eksekusi unduh berurutan dengan verifikasi model_index.json di akhir.
+# foreach $f in $hfFiles → Invoke-ChunkedDownload; cek model_index.json.
+# Tanpa verifikasi, repo korup (mis. file 0 byte) tetap dianggap DONE.
+# ---------------------------------------------------------------------------
 # --- Process ---
 Write-Output ("WAVES:STAGE Mengunduh model dari $RepoId")
 foreach ($f in $script:hfFiles) {
