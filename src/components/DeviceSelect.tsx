@@ -45,20 +45,20 @@ export default function DeviceSelect() {
     : null;
 
   return (
-    <div className="relative flex items-center gap-2.5">
-      <div className="hidden items-center gap-2.5 text-[12px] text-ink-muted sm:flex">
+    <div className="relative flex items-center gap-2">
+      <div className="hidden items-center h-8 gap-2 text-[12px] text-ink-muted sm:flex">
         <span
           title="Info Memori (RAM) Sistem"
-          className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-edge bg-canvas-subtle px-2 py-1.5"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-edge bg-canvas-subtle px-2 py-1.5"
         >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
             <path d="M4 9.5A1.5 1.5 0 0 1 5.5 8H14v4.5a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 4 12.5v-3Zm1.5.5v2.5h7V10h-7Zm1 6.5v1h-1v-1h1Zm2.5 0v1h-1v-1h1Zm2.5 0v1h-1v-1h1Z" />
           </svg>
           {ramLine ?? "RAM —"}
         </span>
         <span
           title="Info GPU (CUDA) Sistem"
-          className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-edge bg-canvas-subtle px-2 py-1.5"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-edge bg-canvas-subtle px-2 py-1.5"
         >
           <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
             <path d="M19 4.5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 19 4.5Zm-5.75 0a2 2 0 0 1 2-2h.5a1.75 1.75 0 0 1 1.75 1.75v1.5a2 2 0 0 1-2 2h-.5a1.75 1.75 0 0 1-1.75-1.75v-1.5ZM1 5.25A1.25 1.25 0 0 1 2.25 4h9A1.25 1.25 0 0 1 12.5 5.25v9a2.25 2.25 0 0 1-2.25 2.25h-3.5a2.25 2.25 0 0 1-2.25-2.25v-2.5H2.25A1.25 1.25 0 0 1 1 10.5v-5.25Zm1.5.25v4.75h4a.75.75 0 0 1 0 1.5h-4v1.25a.75.75 0 0 0 .75.75h3.5a.75.75 0 0 0 .75-.75v-2.5a.75.75 0 0 1 .75-.75h10.25v-1a.75.75 0 0 0-.75-.75H10.5a.75.75 0 0 1-.75-.75V5.5h-7.25Zm8 2.75v-.25a.75.75 0 0 1 .75-.75H13a.25.25 0 0 1 .25.25v2.5A.75.75 0 0 1 12.5 10h-2a.75.75 0 0 1-.75-.75V8.25Z" />

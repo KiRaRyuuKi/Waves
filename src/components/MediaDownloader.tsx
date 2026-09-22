@@ -95,6 +95,7 @@ export default function MediaDownloader() {
   const [downloading, setDownloading] = useState<"video" | "audio" | null>(
     null,
   );
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   const detectedPlatform = detectPlatform(url);
 
@@ -148,6 +149,7 @@ export default function MediaDownloader() {
     if (!mediaInfo || !formatId) return;
 
     setDownloading(type);
+    setDownloadProgress(0);
     setError("");
 
     try {
@@ -171,7 +173,35 @@ export default function MediaDownloader() {
         filename = decodeURIComponent(match[1].trim());
       }
 
-      const blob = await res.blob();
+      // Streaming dengan progress persentase
+      const contentLength = res.headers.get("Content-Length");
+      const total = contentLength ? parseInt(contentLength, 10) : 0;
+      let blob: Blob;
+
+      if (res.body && total > 0) {
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            received += value.length;
+            setDownloadProgress(Math.round((received / total) * 100));
+          }
+        }
+        blob = new Blob(chunks as BlobPart[], {
+          type: res.headers.get("Content-Type") || undefined,
+        });
+        // Pastikan 100% di akhir jika pembulatan belum tepat
+        setDownloadProgress(100);
+      } else {
+        // Fallback tanpa Content-Length (tidak bisa hitung %)
+        blob = await res.blob();
+        setDownloadProgress(100);
+      }
+
       const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = blobUrl;
@@ -184,6 +214,8 @@ export default function MediaDownloader() {
       setError(err instanceof Error ? err.message : "Gagal mengunduh file");
     } finally {
       setDownloading(null);
+      // reset progress setelah animasi selesai biar siap untuk download berikutnya
+      setTimeout(() => setDownloadProgress(0), 600);
     }
   };
 
@@ -328,7 +360,8 @@ export default function MediaDownloader() {
                 <span className="flex items-center gap-1.5 text-[12px] text-ink-muted">
                   <div className="h-3 w-3 animate-spin rounded-full border-2 border-ink-muted border-t-transparent" />
                   Menyiapkan download{" "}
-                  {downloading === "video" ? "video" : "audio"}…
+                  {downloading === "video" ? "video" : "audio"}…{" "}
+                  {downloadProgress > 0 ? `(${Math.round(downloadProgress)}%)` : ""}
                 </span>
               )}
             </div>

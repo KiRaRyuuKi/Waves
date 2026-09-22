@@ -25,6 +25,46 @@ AD_MOTION_DIR = AD_DIR / "motion-adapter"
 AD_CLIP_DIR = AD_DIR / "clip-vit-large"
 WAN_DIR = VIDEO_DIR / "wan"
 
+# --- Video generation jobs (async, to avoid HTTP timeout for long inference) ---
+import uuid
+from dataclasses import dataclass, field
+from enum import Enum
+
+class VideoJobStatus(str, Enum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    DONE = "done"
+    ERROR = "error"
+
+@dataclass
+class VideoJob:
+    id: str
+    status: VideoJobStatus = VideoJobStatus.QUEUED
+    progress: float = 0.0
+    stage: str = "Menunggu"
+    error: str | None = None
+    result: dict | None = None
+    created_at: float = field(default_factory=time.time)
+
+class VideoJobStore:
+    def __init__(self):
+        self._jobs: dict[str, VideoJob] = {}
+        self._lock = threading.Lock()
+    def create(self, job: VideoJob):
+        with self._lock:
+            self._jobs[job.id] = job
+    def get(self, job_id: str) -> VideoJob | None:
+        with self._lock:
+            return self._jobs.get(job_id)
+    def update(self, job_id: str, **fields):
+        with self._lock:
+            j = self._jobs.get(job_id)
+            if j:
+                for k,v in fields.items():
+                    setattr(j, k, v)
+
+video_store = VideoJobStore()
+
 AD_BASE_DIR = Path(__file__).resolve().parent / "storage" / "generate" / "image"
 
 # Pipeline dimuat sekali lalu dipakai bersama, di-cache per (kind, base, device).
@@ -203,7 +243,7 @@ def _load_animatediff(base_dir: Path, device: str):
     try:
         import torch
         from diffusers import AnimateDiffPipeline, DDIMScheduler, MotionAdapter
-        from transformers import CLIPVisionModel
+        from transformers import CLIPVisionModelWithProjection
     except ImportError as exc:
         raise RuntimeError(
             "Library 'diffusers' / 'transformers' belum terpasang. "
@@ -211,10 +251,40 @@ def _load_animatediff(base_dir: Path, device: str):
         ) from exc
 
     dtype = torch.float16 if device == "cuda" else torch.float32
-    adapter = MotionAdapter.from_pretrained(str(AD_MOTION_DIR), torch_dtype=dtype)
-    image_encoder = CLIPVisionModel.from_pretrained(
-        str(AD_CLIP_DIR), torch_dtype=dtype
-    )
+    # Pilih varian bobot motion adapter secara eksplisit agar tidak spam log error
+    # (instalasi lama hanya punya diffusion_pytorch_model.fp16.safetensors)
+    has_fp32 = any((AD_MOTION_DIR / n).is_file() for n in ("diffusion_pytorch_model.safetensors", "diffusion_pytorch_model.bin"))
+    has_fp16 = any((AD_MOTION_DIR / n).is_file() for n in ("diffusion_pytorch_model.fp16.safetensors", "diffusion_pytorch_model.fp16.bin"))
+    try:
+        if has_fp32:
+            adapter = MotionAdapter.from_pretrained(str(AD_MOTION_DIR), torch_dtype=dtype)
+        elif has_fp16:
+            adapter = MotionAdapter.from_pretrained(str(AD_MOTION_DIR), torch_dtype=dtype, variant="fp16")
+        else:
+            # fallback — biarkan diffusers yang tentukan, tapi tangkap error fp32 -> fp16
+            try:
+                adapter = MotionAdapter.from_pretrained(str(AD_MOTION_DIR), torch_dtype=dtype)
+            except OSError as e:
+                if "diffusion_pytorch_model" in str(e):
+                    adapter = MotionAdapter.from_pretrained(str(AD_MOTION_DIR), torch_dtype=dtype, variant="fp16")
+                else:
+                    raise
+    except Exception:
+        raise
+    # CLIP Vision: repo clip-vit-large kadang mengandung weight text_model (UNEXPECTED di log).
+    # Itu aman — vision weight tetap ter-load. Redam log transformers agar tidak mengotori terminal.
+    import logging as _logging
+    import transformers as _transformers
+
+    prev_level = _transformers.logging.get_verbosity()
+    try:
+        _transformers.logging.set_verbosity_error()
+        image_encoder = CLIPVisionModelWithProjection.from_pretrained(
+            str(AD_CLIP_DIR), torch_dtype=dtype
+        )
+    finally:
+        _transformers.logging.set_verbosity(prev_level)
+        _logging.getLogger("transformers").setLevel(_logging.WARNING)
 
     pipe = AnimateDiffPipeline.from_pretrained(
         str(base_dir),
@@ -232,14 +302,17 @@ def _load_animatediff(base_dir: Path, device: str):
         clip_sample=False,
     )
 
-    pipe.enable_vae_slicing()
-    pipe.enable_vae_tiling()
+    # Memory optimizations — check existence for compatibility across diffusers versions
+    if hasattr(pipe, "enable_vae_slicing"):
+        pipe.enable_vae_slicing()
+    if hasattr(pipe, "enable_vae_tiling"):
+        pipe.enable_vae_tiling()
+    if hasattr(pipe, "enable_attention_slicing"):
+        pipe.enable_attention_slicing()
     if device == "cuda":
-        # Pe-rendah 4 GB — selalu offload ke RAM supaya muat.
-        pipe.enable_attention_slicing()
-        pipe.enable_model_cpu_offload()
+        if hasattr(pipe, "enable_model_cpu_offload"):
+            pipe.enable_model_cpu_offload()
     else:
-        pipe.enable_attention_slicing()
         pipe = pipe.to(device)
     return pipe
 
@@ -489,89 +562,124 @@ class VideoGenerateRequest(BaseModel):
 
 
 @router.post("/generate")
-def generate_video(req: VideoGenerateRequest):
-    # Plain `def` → FastAPI jalankan di threadpool (inferensi berat).
+async def generate_video(req: VideoGenerateRequest):
+    # Create async job to avoid HTTP timeout for long inference (video can take minutes)
     try:
         device = devices.resolve_device(req.device)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    import torch
+    # Validate AnimateDiff base early (fast fail)
+    if req.model_id == "animatediff" and not req.base_id:
+        raise HTTPException(
+            400,
+            "AnimateDiff butuh model dasar SD 1.5. Pilih salah satu di dropdown 'Model dasar', "
+            "atau ganti ke model Wan 2.1 / pilih '— Tanpa model dasar —' untuk coba mode lain.",
+        )
 
-    # Decode gambar awal jika mode Gambar → Video
-    init_pil = None
-    if req.init_image_b64:
-        import base64
-        import io
-        from PIL import Image
+    job_id = uuid.uuid4().hex
+    job = VideoJob(id=job_id, status=VideoJobStatus.QUEUED, stage="Menunggu", progress=0)
+    video_store.create(job)
 
-        raw = req.init_image_b64.strip()
-        if raw.startswith("data:"):
-            raw = raw.split(",", 1)[1] if "," in raw else ""
+    def _run():
         try:
-            init_bytes = base64.b64decode(raw)
-        except Exception as exc:
-            raise HTTPException(400, f"Gambar awal tidak valid: {exc}") from exc
-        if not init_bytes:
-            raise HTTPException(400, "Gambar awal kosong.")
-        try:
-            init_pil = Image.open(io.BytesIO(init_bytes)).convert("RGB")
-        except Exception as exc:
-            raise HTTPException(400, f"Gagal membaca gambar awal: {exc}") from exc
+            video_store.update(job_id, status=VideoJobStatus.PROCESSING, stage="Memuat model", progress=5)
+            import torch
 
-    generator = None
-    if req.seed is not None:
-        generator = torch.Generator(device="cpu").manual_seed(req.seed)
+            # Decode init image if any
+            init_pil = None
+            if req.init_image_b64:
+                import base64
+                import io
+                from PIL import Image
 
-    try:
-        if req.model_id == "animatediff":
-            if not req.base_id:
-                # Tetap izinkan tanpa base — akan fallback ke Wan-style txt2vid dengan note
-                # tapi untuk AnimateDiff yang butuh base, beri pesan jelas
-                raise HTTPException(
-                    400,
-                    "AnimateDiff butuh model dasar SD 1.5. Pilih salah satu di dropdown 'Model dasar', "
-                    "atau ganti ke model Wan 2.1 / pilih '— Tanpa model dasar —' untuk coba mode lain.",
-                )
-            pipe = _get_or_load_animatediff(req.base_id, device)
-            frames = pipe(
-                prompt=req.prompt,
-                negative_prompt=req.negative_prompt or None,
-                num_frames=min(req.num_frames, 24),
-                num_inference_steps=req.steps,
-                guidance_scale=req.guidance_scale,
-                width=req.width - (req.width % 16),
-                height=req.height - (req.height % 16),
-                generator=generator,
-            ).frames[0]
-            effective_frames = min(req.num_frames, 24)
-            fps = max(4, min(req.fps, 16))
-            # Jika ada gambar awal, pakai sebagai frame pertama (blend sesuai strength)
-            if init_pil is not None:
-                frames = _apply_init_image(frames, init_pil, req.width, req.height, req.strength)
-        else:
-            # Wan: coba Image-to-Video jika ada gambar awal dan pipeline I2V tersedia
-            if init_pil is not None:
-                try:
-                    import diffusers  # noqa: F401
+                raw = req.init_image_b64.strip()
+                if raw.startswith("data:"):
+                    raw = raw.split(",", 1)[1] if "," in raw else ""
+                init_bytes = base64.b64decode(raw)
+                init_pil = Image.open(io.BytesIO(init_bytes)).convert("RGB")
 
-                    pipe_i2v = _get_or_load_wan_i2v(device)
-                    result = pipe_i2v(
-                        image=init_pil,
-                        prompt=req.prompt,
-                        negative_prompt=req.negative_prompt or None,
-                        num_frames=req.num_frames,
-                        num_inference_steps=req.steps,
-                        guidance_scale=req.guidance_scale,
-                        width=req.width - (req.width % 8),
-                        height=req.height - (req.height % 8),
-                        generator=generator,
-                    )
-                    frames = result.frames[0]
-                    effective_frames = req.num_frames
-                    fps = max(1, min(req.fps, 30))
-                except Exception:
-                    # Fallback ke T2V + blend frame pertama
+            generator = None
+            if req.seed is not None:
+                generator = torch.Generator(device="cpu").manual_seed(req.seed)
+            video_store.update(job_id, stage="Menjalankan inference (0/{})".format(req.steps), progress=10)
+
+            # Callback per-step agar UI tidak stuck di 10%
+            def _make_callback(total_steps: int):
+                def _cb(pipe, step: int, timestep: int, callback_kwargs: dict):  # type: ignore
+                    try:
+                        # diffusers memanggil dengan step 0-indexed
+                        done = step + 1
+                        # Map 10% -> 90% selama denoising
+                        pct = 10 + (done / max(1, total_steps)) * 80
+                        pct = max(10, min(90, pct))
+                        video_store.update(
+                            job_id,
+                            progress=float(pct),
+                            stage=f"Menjalankan inference ({done}/{total_steps})",
+                        )
+                    except Exception:
+                        pass
+                    return callback_kwargs
+                return _cb
+
+            callback = _make_callback(req.steps)
+
+            if req.model_id == "animatediff":
+                pipe = _get_or_load_animatediff(req.base_id, device)
+                frames = pipe(
+                    prompt=req.prompt,
+                    negative_prompt=req.negative_prompt or None,
+                    num_frames=min(req.num_frames, 24),
+                    num_inference_steps=req.steps,
+                    guidance_scale=req.guidance_scale,
+                    width=req.width - (req.width % 16),
+                    height=req.height - (req.height % 16),
+                    generator=generator,
+                    callback_on_step_end=callback,
+                ).frames[0]
+                effective_frames = min(req.num_frames, 24)
+                fps = max(4, min(req.fps, 16))
+                if init_pil is not None:
+                    frames = _apply_init_image(frames, init_pil, req.width, req.height, req.strength)
+            else:
+                if init_pil is not None:
+                    try:
+                        import diffusers  # noqa: F401
+                        pipe_i2v = _get_or_load_wan_i2v(device)
+                        result = pipe_i2v(
+                            image=init_pil,
+                            prompt=req.prompt,
+                            negative_prompt=req.negative_prompt or None,
+                            num_frames=req.num_frames,
+                            num_inference_steps=req.steps,
+                            guidance_scale=req.guidance_scale,
+                            width=req.width - (req.width % 8),
+                            height=req.height - (req.height % 8),
+                            generator=generator,
+                            callback_on_step_end=callback,
+                        )
+                        frames = result.frames[0]
+                        effective_frames = req.num_frames
+                        fps = max(1, min(req.fps, 30))
+                    except Exception:
+                        pipe = _get_or_load_wan(device)
+                        result = pipe(
+                            prompt=req.prompt,
+                            negative_prompt=req.negative_prompt or None,
+                            num_frames=req.num_frames,
+                            num_inference_steps=req.steps,
+                            guidance_scale=req.guidance_scale,
+                            width=req.width - (req.width % 8),
+                            height=req.height - (req.height % 8),
+                            generator=generator,
+                            callback_on_step_end=callback,
+                        )
+                        frames = result.frames[0]
+                        frames = _apply_init_image(frames, init_pil, req.width, req.height, req.strength)
+                        effective_frames = req.num_frames
+                        fps = max(1, min(req.fps, 30))
+                else:
                     pipe = _get_or_load_wan(device)
                     result = pipe(
                         prompt=req.prompt,
@@ -582,55 +690,77 @@ def generate_video(req: VideoGenerateRequest):
                         width=req.width - (req.width % 8),
                         height=req.height - (req.height % 8),
                         generator=generator,
+                        callback_on_step_end=callback,
                     )
                     frames = result.frames[0]
-                    frames = _apply_init_image(frames, init_pil, req.width, req.height, req.strength)
                     effective_frames = req.num_frames
                     fps = max(1, min(req.fps, 30))
-            else:
-                pipe = _get_or_load_wan(device)
-                result = pipe(
-                    prompt=req.prompt,
-                    negative_prompt=req.negative_prompt or None,
-                    num_frames=req.num_frames,
-                    num_inference_steps=req.steps,
-                    guidance_scale=req.guidance_scale,
-                    width=req.width - (req.width % 8),
-                    height=req.height - (req.height % 8),
-                    generator=generator,
+
+            video_store.update(job_id, stage="Encoding video", progress=90)
+            mp4_bytes = _encode_mp4_to_bytes(frames, fps)
+            import base64
+            b64 = base64.b64encode(mp4_bytes).decode("ascii")
+            data_url = f"data:video/mp4;base64,{b64}"
+            video_store.update(
+                job_id,
+                status=VideoJobStatus.DONE,
+                stage="Selesai",
+                progress=100,
+                result={
+                    "video": data_url,
+                    "video_url": data_url,
+                    "seed": req.seed,
+                    "num_frames": effective_frames,
+                    "fps": fps,
+                    "width": req.width,
+                    "height": req.height,
+                    "model_id": req.model_id,
+                    "device": device,
+                },
+            )
+        except HTTPException as exc:
+            video_store.update(job_id, status=VideoJobStatus.ERROR, error=str(exc.detail) if hasattr(exc, "detail") else str(exc), stage="Gagal")
+        except Exception as exc:
+            msg = str(exc)
+            low = msg.lower()
+            if "out of memory" in low or "oom" in low or "memory allocation failed" in low or "cuda" in low and "alloc" in low:
+                msg = (
+                    f"VRAM habis (OOM) — device {device} 4 GB tidak cukup untuk {req.width}x{req.height} "
+                    f"{req.num_frames} frame {req.steps} steps. Coba turunkan resolusi ke 512x512/512x768, "
+                    f"kurangi steps ke 15-20, frames 16, atau ganti device ke CPU. Detail: {exc}"
                 )
-                frames = result.frames[0]
-                effective_frames = req.num_frames
-                fps = max(1, min(req.fps, 30))
-    except FileNotFoundError as exc:
-        raise HTTPException(404, str(exc))
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc))
+            else:
+                msg = f"Generasi video gagal: {exc}"
+            video_store.update(job_id, status=VideoJobStatus.ERROR, error=msg, stage="Gagal")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"job_id": job_id}
+
+
+@router.get("/jobs/{job_id}")
+async def get_video_job(job_id: str):
+    try:
+        job = video_store.get(job_id)
+        if not job:
+            raise HTTPException(404, "Job tidak ditemukan atau sudah kedaluwarsa. Silakan generate ulang.")
+        # Serialisasi aman — Enum jadi string, progress dibulatkan
+        status_val = job.status.value if isinstance(job.status, VideoJobStatus) else str(job.status)
+        return {
+            "id": job.id,
+            "status": status_val,
+            "progress": float(job.progress),
+            "stage": job.stage,
+            "error": job.error,
+            "result": job.result,
+            "created_at": job.created_at,
+        }
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, f"Generasi video gagal: {exc}")
+    except Exception as exc:  # jangan biarkan handler global 500 generik tanpa log terperinci
+        import logging
 
-    try:
-        mp4_bytes = _encode_mp4_to_bytes(frames, fps)
-    except RuntimeError as exc:
-        raise HTTPException(500, str(exc))
-
-    import base64
-    b64 = base64.b64encode(mp4_bytes).decode("ascii")
-    data_url = f"data:video/mp4;base64,{b64}"
-
-    return {
-        "video": data_url,
-        "video_url": data_url,
-        "seed": req.seed,
-        "num_frames": effective_frames,
-        "fps": fps,
-        "width": req.width,
-        "height": req.height,
-        "model_id": req.model_id,
-        "device": device,
-    }
+        logging.error(f"get_video_job error {job_id}: {exc}", exc_info=True)
+        raise HTTPException(500, f"Gagal memuat status job: {exc}")
 
 
 _io_counter = 0

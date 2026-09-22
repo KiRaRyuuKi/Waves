@@ -18,6 +18,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Form
 
 from . import devices
 from .jobs import Job, JobStatus, store
+from .coder import router as coder_router
 from .image import router as image_router
 from .downloader import router as downloader_router
 from .separator import OUTPUT_ROOT, STORAGE_ROOT, run_separation, stem_file_path
@@ -61,6 +62,7 @@ async def rate_limit_middleware(request: Request, call_next):
         request.url.path.startswith("/api/jobs")
         or request.url.path.startswith("/api/generate")
         or request.url.path.startswith("/api/video/generate")
+        or request.url.path.startswith("/api/coder")
         or request.url.path.startswith("/api/setup/tasks")
         or request.url.path.startswith("/api/downloader")
         or request.url.path.startswith("/api/llm/download")
@@ -81,6 +83,7 @@ app.include_router(voice_router)
 app.include_router(training_router)
 app.include_router(image_router)
 app.include_router(video_router)
+app.include_router(coder_router)
 app.include_router(downloader_router)
 app.include_router(setup_router)
 app.include_router(llm_router)
@@ -258,6 +261,14 @@ async def get_stem(job_id: str, stem: str):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Jangan menelan HTTPException (404/400/etc) — biarkan handler bawaan FastAPI yang menangani.
+    if isinstance(exc, HTTPException):
+        raise exc
+    from fastapi.exceptions import RequestValidationError
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    if isinstance(exc, (StarletteHTTPException, RequestValidationError)):
+        raise exc
     # Do not expose traceback to clients; log server-side only (A05).
     logging.error(f"Unhandled error at {request.url.path}: {exc}", exc_info=True)
     return JSONResponse(status_code=500, content={"detail": "Internal server error, please try again later"})

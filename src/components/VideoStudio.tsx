@@ -44,6 +44,38 @@ export default function VideoStudio() {
   const [models, setModels] = useState<VideoModelInfo[] | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const downloadDataUrl = (dataUrl: string, filename: string) => {
+    try {
+      const parts = dataUrl.split(",");
+      const header = parts[0] || "";
+      const base64 = parts[1] || "";
+      const mime = header.match(/:(.*?);/)?.[1] || "video/mp4";
+      const binary = atob(base64);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        a.remove();
+      }, 800);
+    } catch {
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = filename;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  };
   const [backendDown, setBackendDown] = useState(false);
 
   const [modelId, setModelId] = useState("animatediff");
@@ -65,6 +97,8 @@ export default function VideoStudio() {
   const [strength, setStrength] = useState(0.6);
 
   const [generating, setGenerating] = useState(false);
+  const [jobStage, setJobStage] = useState<string | null>(null);
+  const [jobProgress, setJobProgress] = useState<number>(0);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultMeta, setResultMeta] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
@@ -94,6 +128,19 @@ export default function VideoStudio() {
     loadModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-refresh when download finishes in Setup (poll every 3s if not all installed)
+  useEffect(() => {
+    if (backendDown) return;
+    const hasPending = models !== null && models.some((m) => !m.installed);
+    if (!hasPending) return;
+    const timer = setInterval(() => {
+      fetchVideoModels()
+        .then((list) => setModels(list))
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [models, backendDown]);
 
   const selectedModel = models?.find((m) => m.id === modelId) ?? null;
   const kind = selectedModel?.kind ?? "animatediff";
@@ -215,27 +262,36 @@ export default function VideoStudio() {
     if (!selectedModel || !prompt.trim()) return;
     if (mode === "img2vid" && !initFile) return;
     setGenerating(true);
+    setJobStage("Menunggu");
+    setJobProgress(0);
     setGenError(null);
     setResultUrl(null);
     setResultMeta(null);
     const res = resolutions[resolutionIdx] ?? resolutions[0];
     try {
-      const out = await generateVideo({
-        modelId,
-        baseId: kind === "animatediff" ? baseId : undefined,
-        prompt,
-        negativePrompt,
-        steps,
-        guidanceScale,
-        width: res.w,
-        height: res.h,
-        numFrames,
-        fps,
-        seed: parseSeed(),
-        device,
-        initImage: mode === "img2vid" ? initFile?.dataUrl : undefined,
-        strength,
-      });
+      const out = await generateVideo(
+        {
+          modelId,
+          baseId: kind === "animatediff" ? baseId : undefined,
+          prompt,
+          negativePrompt,
+          steps,
+          guidanceScale,
+          width: res.w,
+          height: res.h,
+          numFrames,
+          fps,
+          seed: parseSeed(),
+          device,
+          initImage: mode === "img2vid" ? initFile?.dataUrl : undefined,
+          strength,
+        },
+        (stage, progress) => {
+          setJobStage(stage);
+          // progress -1 = transient retry (backend sibuk), jangan reset bar
+          if (progress >= 0) setJobProgress(progress);
+        }
+      );
       const url = (out as any).video || out.video_url || "";
       setResultUrl(url);
       setResultMeta(
@@ -565,7 +621,7 @@ export default function VideoStudio() {
             </details>
 
             <button
-              className="btn btn-primary self-start"
+              className="w-full btn btn-primary self-start"
               disabled={submitDisabled}
               onClick={handleGenerate}
             >
@@ -578,89 +634,76 @@ export default function VideoStudio() {
           </div>
 
           {/* Hasil — media player */}
-          <div className="card flex min-h-[320px] flex-col p-5">
-            {generating && (
-              <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center gap-3 text-ink-muted">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-muted border-t-transparent" />
-                <div className="max-w-sm text-center text-[13px]">
-                  Menjalankan inferensi video… Proses ini lebih berat dari
-                  gambar. Di GPU 4 GB, AnimateDiff bisa beberapa menit, Wan bisa
-                  puluhan menit.
+          <div className="flex flex-col gap-4">
+            <div
+              data-testid="video-result-card"
+              className="card flex min-h-[660px] flex-col p-5"
+            >
+              {generating && (
+                <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center gap-3 text-ink-muted">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-muted border-t-transparent" />
+                  <div className="max-w-sm text-center text-[13px]">
+                    {jobStage || "Menjalankan inferensi video…"}{" "}
+                    {jobProgress > 0 && jobProgress < 100
+                      ? `(${Math.round(jobProgress)}%)`
+                      : ""}
+                  </div>
+                  <div className="h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-canvas-inset">
+                    <div
+                      className="h-full bg-ink transition-[width] duration-300"
+                      style={{
+                        width: `${Math.min(100, Math.max(5, jobProgress))}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="max-w-sm text-center text-[11px] text-ink-subtle">
+                    Proses ini lebih berat dari gambar. AnimateDiff bisa
+                    beberapa menit, Wan bisa puluhan menit. Jangan tutup tab.
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {!generating && !resultUrl && !genError && (
-              <div className="flex min-h-[280px] flex-1 items-center justify-center border border-dashed border-edge text-[13px] text-ink-muted">
-                Hasil video akan muncul di sini.
-              </div>
-            )}
-
-            {!generating && resultUrl && (
-              <div className="flex flex-col items-center justify-center gap-3">
-                <video
-                  key={resultUrl}
-                  src={resultUrl}
-                  controls
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="max-h-[520px] w-full rounded-md border border-edge bg-black"
-                />
-                <div className="flex flex-col items-center gap-1 text-[11px] text-ink-muted">
-                  {resultMeta && <span>{resultMeta}</span>}
-                  <a
-                    href={resultUrl}
-                    download={`waves-video-${Date.now()}.mp4`}
-                    className="text-ink underline decoration-dotted"
-                  >
-                    Unduh .mp4
-                  </a>
+              {!generating && !resultUrl && !genError && (
+                <div className="flex min-h-[280px] flex-1 items-center justify-center rounded-md border-2 border-dashed border-edge text-[13px] text-ink-muted">
+                  Hasil video akan muncul di sini.
                 </div>
-              </div>
-            )}
+              )}
 
-            {!generating && genError && (
-              <div className="flex min-h-[280px] flex-1 items-center justify-center text-center text-[13px] text-red-600">
-                {genError}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {history.length > 0 && (
-        <div className="card mt-4 p-5">
-          <div className="mb-3 text-xs font-semibold">
-            Riwayat video (sesi ini, tidak disimpan di server)
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {history.map((url, i) => (
-              <div
-                key={`${i}-${url.slice(0, 20)}`}
-                className="group overflow-hidden rounded-md border border-edge bg-canvas-subtle"
-              >
-                <video
-                  src={url}
-                  muted
-                  playsInline
-                  preload="metadata"
-                  controls
-                  className="aspect-video w-full bg-black object-cover"
-                />
-                <div className="flex items-center justify-between px-2 py-1 text-[11px] text-ink-muted">
-                  <span className="truncate">Video {history.length - i}</span>
-                  <a
-                    href={url}
-                    download={`waves-video-${Date.now()}-${i}.mp4`}
-                    className="text-ink underline decoration-dotted"
-                  >
-                    Unduh
-                  </a>
+              {!generating && resultUrl && (
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <video
+                    key={resultUrl}
+                    src={resultUrl}
+                    controls
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="max-h-[520px] w-full rounded-md border-2 border-dashed border-edge bg-black"
+                  />
+                  <div className="flex flex-col items-center gap-1 text-[11px] text-ink-muted">
+                    <span className="truncate text-left underline decoration-dotted hover:text-ink">
+                      Video · {resultMeta && <span> · {resultMeta}</span>}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadDataUrl(resultUrl, "waves-video.mp4")
+                      }
+                      className="shrink-0 rounded border border-edge bg-white px-2 py-0.5 text-[11px] font-medium hover:bg-canvas-inset"
+                    >
+                      Unduh
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )}
+
+              {!generating && genError && (
+                <div className="flex min-h-[280px] flex-1 items-center justify-center text-center text-[13px] text-red-600">
+                  {genError}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

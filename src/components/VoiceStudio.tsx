@@ -291,7 +291,7 @@ export default function VoiceStudio() {
           </details>
 
           <button
-            className="btn btn-primary self-start"
+            className="btn w-40 btn-primary self-start"
             disabled={backendDown || generating || !text.trim()}
             onClick={handleGenerate}
           >

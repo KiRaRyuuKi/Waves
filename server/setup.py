@@ -181,6 +181,23 @@ def _task_state(task_id: str) -> dict:
             "percent": min(percent, 99.0) if total > 0 else 0.0,
         }
 
+    # Special handling for AnimateDiff: check both safetensors variants (fp16 and full) for backward compatibility
+    if task_id == "animate_diff":
+        motion_main = check_dir / "motion-adapter" / "diffusion_pytorch_model.safetensors"
+        motion_fp16 = check_dir / "motion-adapter" / "diffusion_pytorch_model.fp16.safetensors"
+        clip_file = check_dir / "clip-vit-large" / "model.safetensors"
+        # Count motion as installed if either file exists with correct size
+        motion_done = 0
+        if motion_main.is_file():
+            motion_done = min(motion_main.stat().st_size, AD_MOTION_TOTAL)
+        elif motion_fp16.is_file():
+            motion_done = min(motion_fp16.stat().st_size, AD_MOTION_TOTAL)
+        clip_done = min(clip_file.stat().st_size, AD_CLIP_TOTAL) if clip_file.is_file() else 0
+        done = motion_done + clip_done
+        percent = round(100.0 * done / known, 1) if known else 0.0
+        installed = percent >= 100.0
+        return {"installed": installed, "done_bytes": done, "total_bytes": known, "percent": percent}
+
     done = _dir_bytes(check_dir, bigs)
     percent = round(100.0 * done / known, 1) if known else 0.0
     installed = percent >= 100.0
@@ -244,12 +261,13 @@ TASKS = [
         "name": "AnimateDiff",
         "description": "Model video AnimateDiff (~3,5 GB) — motion adapter + CLIP Vision untuk video pendek dari model SD 1.5.",
         "info": "Gabungan motion adapter (v1-5-2) dan CLIP Vision ViT-Large/14. Ringan & cepat, cocok untuk GPU 4 GB. Output 512x512, 16 frame. Folder: animate-diff/.",
-        "script": "dl_animatediff.ps1",
+        "script": "dl_model.ps1",
+        "script_args": ["-RepoId", "animatediff-bundle"],
         "category": "model_video",
         "total_bytes": AD_MOTION_TOTAL + AD_CLIP_TOTAL,
         "check_dir": ANIMATEDIFF_DIR,
         "check_files": {
-            "motion-adapter/diffusion_pytorch_model.fp16.safetensors": AD_MOTION_TOTAL,
+            "motion-adapter/diffusion_pytorch_model.safetensors": AD_MOTION_TOTAL,
             "clip-vit-large/model.safetensors": AD_CLIP_TOTAL,
         },
         "needs_python": False,
@@ -259,9 +277,8 @@ TASKS = [
         "name": "Wan 2.1 T2V 1.3B",
         "description": "Model video Wan 2.1 dari Alibaba (~28 GB, "
         "layout diffusers). Kualitas gerak lebih baik dari AnimateDiff.",
-        "info": "Butuh unduhan besar (~28 GB) & RAM 24 GB+; di GPU 4 GB "
-        "berjalan dengan offload ke RAM jadi lambat. Pilih ini kalau ingin "
-        "hasil video yang lebih natural.",
+        "info": "Butuh unduhan besar (~28 GB) & RAM 24 GB+. "
+        "Pilih ini kalau ingin hasil video yang lebih natural.",
         "script": "dl_model.ps1",
         "script_args": [
             "-RepoId", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",

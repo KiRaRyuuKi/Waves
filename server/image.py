@@ -6,6 +6,12 @@ import json
 import re
 from pathlib import Path
 
+import threading
+import time
+import uuid
+from dataclasses import dataclass, field
+from enum import Enum
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -13,6 +19,42 @@ from pydantic import BaseModel, Field
 from . import devices
 
 router = APIRouter(prefix="/api", tags=["sd"])
+
+# --- Image generation jobs (async, polling progress seperti video) ---
+class ImageJobStatus(str, Enum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    DONE = "done"
+    ERROR = "error"
+
+@dataclass
+class ImageJob:
+    id: str
+    status: ImageJobStatus = ImageJobStatus.QUEUED
+    progress: float = 0.0
+    stage: str = "Menunggu"
+    error: str | None = None
+    result: dict | None = None
+    created_at: float = field(default_factory=time.time)
+
+class ImageJobStore:
+    def __init__(self):
+        self._jobs: dict[str, ImageJob] = {}
+        self._lock = threading.Lock()
+    def create(self, job: ImageJob):
+        with self._lock:
+            self._jobs[job.id] = job
+    def get(self, job_id: str) -> ImageJob | None:
+        with self._lock:
+            return self._jobs.get(job_id)
+    def update(self, job_id: str, **fields):
+        with self._lock:
+            j = self._jobs.get(job_id)
+            if j:
+                for k, v in fields.items():
+                    setattr(j, k, v)
+
+image_store = ImageJobStore()
 
 MODELS_DIR = Path(__file__).resolve().parent / "storage" / "generate" / "image"
 
@@ -55,30 +97,52 @@ def _find_cover(model_dir: Path) -> Path | None:
 
 
 def list_models() -> list[dict]:
-    """Scan the image directory and list folders containing a valid model (mode A
-    or B). The list is available even without diffusers installed."""
-    if not MODELS_DIR.is_dir():
-        return []
-    out = []
-    for entry in sorted(MODELS_DIR.iterdir()):
-        if not entry.is_dir() or entry.name.startswith("."):
-            continue
-        has_pipeline = (entry / "model_index.json").is_file()
-        has_checkpoint = any(
-            p for ext in _CHECKPOINT_EXTS for p in entry.glob(f"*{ext}")
-        )
-        if not (has_pipeline or has_checkpoint):
-            continue
-        meta = _meta(entry)
-        out.append(
-            {
+    """Return all known image models (including not yet downloaded) with installed flag,
+    plus any custom models found in the directory."""
+    # Known models from Setup tasks (image)
+    known_defs = [
+        {"id": "tiny-sd", "name": "Tiny SD", "description": "Model Stable Diffusion ringan (~1 GB) untuk Image Generation."},
+        {"id": "stable-diffusion", "name": "Stable Diffusion 1.5", "description": "Model SD 1.5 standar industri (~5,1 GB)."},
+        {"id": "dream-shaper", "name": "DreamShaper 8", "description": "Fine-tune SD 1.5 untuk ilustrasi artistik (~5,1 GB)."},
+    ]
+    # Build map of existing models on disk
+    existing: dict[str, dict] = {}
+    if MODELS_DIR.is_dir():
+        for entry in sorted(MODELS_DIR.iterdir()):
+            if not entry.is_dir() or entry.name.startswith("."):
+                continue
+            has_pipeline = (entry / "model_index.json").is_file()
+            has_checkpoint = any(p for ext in _CHECKPOINT_EXTS for p in entry.glob(f"*{ext}"))
+            if not (has_pipeline or has_checkpoint):
+                continue
+            meta = _meta(entry)
+            existing[entry.name] = {
                 "id": entry.name,
                 "name": meta.get("name") or _pretty_name(entry.name),
                 "description": meta.get("description", ""),
                 "has_cover": _find_cover(entry) is not None,
-                "installed": True,
             }
-        )
+
+    out: list[dict] = []
+    # First, return known models with installed status
+    for kd in known_defs:
+        mid = kd["id"]
+        if mid in existing:
+            out.append({**existing[mid], "installed": True})
+        else:
+            out.append({
+                "id": mid,
+                "name": kd["name"],
+                "description": kd["description"],
+                "has_cover": False,
+                "installed": False,
+            })
+    # Then add any custom models not in known list
+    for mid, info in existing.items():
+        if mid not in {kd["id"] for kd in known_defs}:
+            out.append({**info, "installed": True})
+    # Sort A-Z by name for consistent dropdown ordering
+    out.sort(key=lambda x: x["name"].lower())
     return out
 
 
@@ -180,8 +244,10 @@ def generate(
     init_image: bytes | None = None,
     strength: float = 0.5,
     device: str = "cpu",
+    on_step: object | None = None,
 ) -> tuple[list[bytes], int | None]:
-    """Run the pipeline and return (list of PNG bytes, used seed)."""
+    """Run the pipeline and return (list of PNG bytes, used seed).
+    on_step: optional callback_on_step_end callable(step-aware) untuk update progress."""
     import torch
 
     pipe = _get_or_load(model_id, device)
@@ -193,6 +259,9 @@ def generate(
     if seed is not None:
         generator = torch.Generator(device="cpu").manual_seed(seed)
 
+    # diffusers callback_on_step_end signature: (pipe, step, timestep, callback_kwargs) -> dict
+    cb = on_step
+
     if init_image is not None:
         try:
             from PIL import Image
@@ -203,7 +272,8 @@ def generate(
             ) from exc
         init = Image.open(io.BytesIO(init_image)).convert("RGB")
         st = min(float(strength), 0.999)  # strength >= 1 == txt2img murni
-        images = _img2img_pipe(_get_or_load(model_id, device), device)(
+        pipe2 = _img2img_pipe(_get_or_load(model_id, device), device)
+        call_kwargs = dict(
             prompt=prompt,
             image=init,
             strength=st,
@@ -212,9 +282,12 @@ def generate(
             generator=generator,
             num_images_per_prompt=n_images,
             **kwargs,
-        ).images
+        )
+        if cb is not None:
+            call_kwargs["callback_on_step_end"] = cb  # type: ignore
+        images = pipe2(**call_kwargs).images  # type: ignore
     else:
-        images = pipe(
+        call_kwargs = dict(
             prompt=prompt,
             num_inference_steps=steps,
             guidance_scale=guidance_scale,
@@ -223,7 +296,10 @@ def generate(
             generator=generator,
             num_images_per_prompt=n_images,
             **kwargs,
-        ).images
+        )
+        if cb is not None:
+            call_kwargs["callback_on_step_end"] = cb  # type: ignore
+        images = pipe(**call_kwargs).images  # type: ignore
 
     payloads = []
     for img in images:
@@ -272,10 +348,9 @@ class GenerateRequest(BaseModel):
 
 
 @router.post("/generate")
-def generate_image(req: GenerateRequest):
-    # Use plain `def` (not async) so FastAPI runs this heavy inference
-    # in a threadpool without blocking the event loop — same as
-    # /api/voice/synthesize.
+async def generate_image(req: GenerateRequest):
+    """Async job: kembalikan job_id, frontend polling GET /api/generate/jobs/{id}.
+    Tetap kompatibel: jika client lama menunggu JSON images, polling akan selesai cepat."""
     try:
         resolved_device = devices.resolve_device(req.device)
     except ValueError as exc:
@@ -293,29 +368,90 @@ def generate_image(req: GenerateRequest):
         if not init_bytes:
             raise HTTPException(400, "Gambar inisialisasi kosong.")
 
-    try:
-        payloads, seed = generate(
-            model_id=req.model_id,
-            prompt=req.prompt,
-            negative_prompt=req.negative_prompt,
-            steps=req.steps,
-            guidance_scale=req.guidance_scale,
-            width=req.width,
-            height=req.height,
-            seed=req.seed,
-            n_images=req.n_images,
-            init_image=init_bytes,
-            strength=req.strength,
-            device=resolved_device,
-        )
-    except FileNotFoundError as exc:
-        raise HTTPException(404, str(exc))
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc))
-    except Exception as exc:  # noqa: BLE001 - inference failure -> 500 dengan detail
-        raise HTTPException(500, f"Generasi gagal: {exc}")
+    job_id = uuid.uuid4().hex
+    job = ImageJob(id=job_id, status=ImageJobStatus.QUEUED, stage="Menunggu", progress=0)
+    image_store.create(job)
 
-    encoded = [
-        f"data:image/png;base64,{base64.b64encode(p).decode('ascii')}" for p in payloads
-    ]
-    return {"images": encoded, "seed": seed}
+    def _run():
+        try:
+            image_store.update(job_id, status=ImageJobStatus.PROCESSING, stage="Memuat model", progress=5)
+            # Callback per-step agar UI tidak diam (0% -> 90% selama denoising)
+            def _make_cb(total: int):
+                def _cb(pipe, step: int, timestep: int, cb_kwargs: dict):  # type: ignore
+                    try:
+                        done = step + 1
+                        pct = 10 + (done / max(1, total)) * 80
+                        image_store.update(
+                            job_id,
+                            progress=float(max(10, min(90, pct))),
+                            stage=f"Menjalankan inference ({done}/{total})",
+                        )
+                    except Exception:
+                        pass
+                    return cb_kwargs
+                return _cb
+
+            cb = _make_cb(req.steps)
+            image_store.update(job_id, stage=f"Menjalankan inference (0/{req.steps})", progress=10)
+            payloads, seed = generate(
+                model_id=req.model_id,
+                prompt=req.prompt,
+                negative_prompt=req.negative_prompt,
+                steps=req.steps,
+                guidance_scale=req.guidance_scale,
+                width=req.width,
+                height=req.height,
+                seed=req.seed,
+                n_images=req.n_images,
+                init_image=init_bytes,
+                strength=req.strength,
+                device=resolved_device,
+                on_step=cb,
+            )
+            image_store.update(job_id, stage="Encoding", progress=95)
+            encoded = [
+                f"data:image/png;base64,{base64.b64encode(p).decode('ascii')}" for p in payloads
+            ]
+            image_store.update(
+                job_id,
+                status=ImageJobStatus.DONE,
+                stage="Selesai",
+                progress=100,
+                result={"images": encoded, "seed": seed},
+            )
+        except HTTPException as exc:
+            image_store.update(job_id, status=ImageJobStatus.ERROR, stage="Gagal", error=str(exc.detail) if hasattr(exc, "detail") else str(exc))
+        except Exception as exc:  # noqa: BLE001
+            # Sampaikan OOM lebih ramah
+            msg = str(exc)
+            if "out of memory" in msg.lower() or "oom" in msg.lower():
+                msg = f"VRAM habis (OOM) saat {req.width}x{req.height} {req.steps} steps. Coba turunkan resolusi/steps atau pilih device CPU. Detail: {exc}"
+            image_store.update(job_id, status=ImageJobStatus.ERROR, stage="Gagal", error=f"Generasi gagal: {msg}")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"job_id": job_id}
+
+
+@router.get("/generate/jobs/{job_id}")
+async def get_image_job(job_id: str):
+    try:
+        job = image_store.get(job_id)
+        if not job:
+            raise HTTPException(404, "Job tidak ditemukan atau sudah kedaluwarsa. Silakan generate ulang.")
+        status_val = job.status.value if isinstance(job.status, ImageJobStatus) else str(job.status)
+        return {
+            "id": job.id,
+            "status": status_val,
+            "progress": float(job.progress),
+            "stage": job.stage,
+            "error": job.error,
+            "result": job.result,
+            "created_at": job.created_at,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import logging
+
+        logging.error(f"get_image_job error {job_id}: {exc}", exc_info=True)
+        raise HTTPException(500, f"Gagal memuat status job: {exc}")

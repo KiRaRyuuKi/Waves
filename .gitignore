@@ -1,19 +1,30 @@
 __pycache__/
 *.pyc
 
-server/storage/models/*/*.pth
-server/storage/separated/*
-server/storage/training/*
-server/storage/uploads/*
-
+# Waves runtime storage (jangan commit model/hasil)
 server/storage/generate/video/*/
 server/storage/generate/image/*/
-
+server/storage/llm/*
+server/storage/coder/*
+server/storage/models/*/*.pth
+server/storage/separated/*
 server/storage/torch/*
+server/storage/training/*
+server/storage/uploads/*
+server/storage/jobs.json
+
+# Vendor heavy artefacts (keep source, ignore built models)
+vendor/llama/models/*.gguf
+vendor/llama/build/
+vendor/llama/*.bin
+vendor/coder/backend/.venv/
+vendor/coder/frontend/node_modules/
+vendor/coder/frontend/dist/
 
 node_modules/
 .next/
 dist/
+tsconfig.tsbuildinfo
 
 venv/
 .venv/
@@ -21,7 +32,12 @@ venv/
 .waves
 
 *.pth
+# GGUF tidak di-commit (kecuali vocab kecil yang dibutuhkan build)
+*.gguf
+*.bin
 
 *.log
 
 .DS_Store
+*.backup.gif
+*.backup.*

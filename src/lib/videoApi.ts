@@ -24,9 +24,10 @@ export interface VideoOutput {
   created: number;
 }
 
-const coverCacheBust = `v=${Date.now()}`;
 export function sdCoverUrlForVideoBase(modelId: string): string {
-  return `/api/models/${encodeURIComponent(modelId)}/cover?${coverCacheBust}`;
+  // Hindari Date.now() di level modul (hydration mismatch SSR/client).
+  // Cache-bust cukup dengan timestamp saat fungsi dipanggil, atau tanpa bust karena header no-store.
+  return `/api/models/${encodeURIComponent(modelId)}/cover`;
 }
 
 export async function fetchVideoModels(): Promise<VideoModelInfo[]> {
@@ -73,7 +74,8 @@ export interface GenerateVideoResult {
 }
 
 export async function generateVideo(
-  params: GenerateVideoParams
+  params: GenerateVideoParams,
+  onProgress?: (stage: string, progress: number) => void
 ): Promise<GenerateVideoResult> {
   const res = await fetch("/api/video/generate", {
     method: "POST",
@@ -98,6 +100,68 @@ export async function generateVideo(
   if (!res.ok) {
     const detail = await res.json().catch(() => null);
     throw new Error(detail?.detail || `Generasi gagal (${res.status})`);
+  }
+  const data = await res.json();
+  // New async job: { job_id } — poll until done with progress callback
+  if (data.job_id) {
+    const jobId = data.job_id as string;
+    let transientFailures = 0;
+    const maxTransient = 20; // ~30s of backend stalls (20*1.5s) sebelum dianggap gagal; inference video bisa 20 menit
+    while (true) {
+      await new Promise((r) => setTimeout(r, 1500));
+      let st: VideoJobStatus;
+      try {
+        st = await fetchVideoJob(jobId);
+        transientFailures = 0;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // 404 = job hilang (server restart, TTL) — fatal
+        if (msg.includes("(404)") || msg.toLowerCase().includes("tidak ditemukan")) {
+          throw e;
+        }
+        transientFailures += 1;
+        if (transientFailures >= maxTransient) {
+          throw e;
+        }
+        // Backend sedang sibuk (inference blok, ECONNRESET/ETIMEDOUT) — jangan fatal, tampilkan retry
+        if (onProgress) {
+          // pertahankan progress lama, cuma ganti stage agar user tahu sedang retry
+          onProgress(`Menghubungkan ulang ke backend... (${transientFailures})`, -1);
+        }
+        continue;
+      }
+      if (onProgress) onProgress(st.stage || "Memproses", st.progress || 0);
+      if (st.status === "error") {
+        throw new Error(st.error || "Generasi video gagal");
+      }
+      if (st.status === "done" && st.result) {
+        return st.result as GenerateVideoResult;
+      }
+      // still queued/processing — continue polling
+    }
+  }
+  return data as GenerateVideoResult;
+}
+
+export interface VideoJobStatus {
+  id: string;
+  status: "queued" | "processing" | "done" | "error";
+  progress: number;
+  stage: string;
+  error?: string | null;
+  result?: GenerateVideoResult | null;
+}
+
+export async function fetchVideoJob(jobId: string): Promise<VideoJobStatus> {
+  const res = await fetch(`/api/video/jobs/${encodeURIComponent(jobId)}`);
+  if (!res.ok) {
+    // Coba parse JSON, fallback ke text (proxy Next bisa kembalikan HTML saat ECONNRESET/ETIMEDOUT)
+    const detail = await res.json().catch(() => null);
+    const textFallback = !detail ? await res.clone().text().catch(() => "") : "";
+    const msg = detail?.detail || textFallback || `Gagal memuat status job (${res.status})`;
+    // Sertakan status agar caller bisa bedakan 404 vs 500 transient
+    const suffix = msg.includes(`(${res.status})`) ? "" : ` (${res.status})`;
+    throw new Error(msg + suffix);
   }
   return res.json();
 }

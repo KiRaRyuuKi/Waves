@@ -1,0 +1,22 @@
+# GitHub Funding - Waves, mengaktifkan tombol "Sponsor" di https://github.com/KiRaRyuuKi/Waves
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+github: KiRaRyuuKi
+
+# patreon: KiRaRyuuKi
+# ko_fi: KiRaRyuuKi
+# buy_me_a_coffee: KiRaRyuuKi
+# open_collective: KiRaRyuuKi
+# liberapay: KiRaRyuuKi
+# tidelift: npm/waves
+# issuehunt: KiRaRyuuKi
+# otechie: KiRaRyuuKi
+# lfx_crowdfunding: KiRaRyuuKi
+# community_bridge: KiRaRyuuKi
+
+custom:
+  - https://saweria.co/KiRaRyuuKi
+  # - https://trakteer.id/KiRaRyuuKi
+  # - https://paypal.me/KiRaRyuuKi
+  # - https://ko-fi.com/KiRaRyuuKi
+  # - https://buymeacoffee.com/KiRaRyuuKi

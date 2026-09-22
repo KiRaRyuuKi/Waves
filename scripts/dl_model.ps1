@@ -15,7 +15,9 @@ param(
   # Ikut sertakan file BUKAN .json di root repo (mis. checkpoint .safetensors
   # yang persis di root, khas repo transformers/CLIP & motion module).
   # Default false: hanya file .json di root yang diambil (layout diffusers).
-  [switch]$KeepRoot
+  [switch]$KeepRoot,
+  # Hanya uji koneksi & daftar file tanpa download (dipakai untuk cek apakah download bisa atau tidak).
+  [switch]$Test
 )
 
 $ErrorActionPreference = "Continue"
@@ -24,17 +26,114 @@ $ErrorActionPreference = "Continue"
 # bawaan PS 5.x bikin Invoke-RestMethod sangat lambat seperti hang.
 $ProgressPreference = "SilentlyContinue"
 
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
+
+# --- Koneksi check ke HuggingFace (dipakai semua model termasuk Wan & AnimateDiff) ---
+function Test-HFConnection {
+  param([int]$MaxAttempts = 3)
+  for ($i = 1; $i -le $MaxAttempts; $i++) {
+    try {
+      $null = Invoke-WebRequest -Uri "https://huggingface.co" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
+      return $true
+    } catch {
+      Write-Output ("WAVES:LOG Cek koneksi HuggingFace percobaan {0}/{1} gagal: {2}" -f $i, $MaxAttempts, $_.Exception.Message)
+      if ($i -lt $MaxAttempts) { Start-Sleep -Seconds (3 * $i) }
+    }
+    try {
+      $null = Invoke-RestMethod -Uri "https://huggingface.co/api/models/bert-base-uncased" -TimeoutSec 10 -ErrorAction Stop
+      return $true
+    } catch {}
+  }
+  return $false
+}
+
+# --- Bundle AnimateDiff (+ Wan sudah via generic) : gabungan dari dl_animatediff.ps1 ---
+$animateBundleIds = @("animatediff", "animatediff-bundle", "animate_diff", "animate-diff")
+if ($RepoId -in $animateBundleIds) {
+  if ($Test) {
+    Write-Output "WAVES:STAGE AnimateDiff - uji koneksi & daftar file (tidak download)..."
+    if (-not (Test-HFConnection -MaxAttempts 3)) {
+      Write-Output "WAVES:ERROR Tidak ada koneksi ke HuggingFace (huggingface.co). Periksa internet / proxy / firewall, lalu coba lagi."
+      exit 1
+    }
+    Write-Output "WAVES:LOG [TEST 1/2] Motion Adapter AnimateDiff v1-5-2..."
+    & $PSCommandPath -RepoId "guoyww/animatediff-motion-adapter-v1-5-2" -Base $bundleBase -Folder "animate-diff/motion-adapter" -KeepRoot -Exclude "README.md,.gitattributes" -Test
+    if ($LASTEXITCODE -ne 0) { Write-Output "WAVES:ERROR Uji motion adapter gagal (exit $LASTEXITCODE)"; exit $LASTEXITCODE }
+    Write-Output "WAVES:LOG [TEST 2/2] CLIP Vision ViT-Large/14..."
+    & $PSCommandPath -RepoId "openai/clip-vit-large-patch14" -Base $bundleBase -Folder "animate-diff/clip-vit-large" -KeepRoot -Exclude "pytorch_model.bin,flax_model.msgpack,tf_model.h5,README.md,.gitattributes" -Test
+    if ($LASTEXITCODE -ne 0) { Write-Output "WAVES:ERROR Uji CLIP Vision gagal (exit $LASTEXITCODE)"; exit $LASTEXITCODE }
+    Write-Output "WAVES:LOG Uji AnimateDiff OK - kedua repo bisa diakses, download bisa dilakukan."
+    Write-Output "WAVES:DONE"
+    exit 0
+  }
+  Write-Output "WAVES:STAGE AnimateDiff - mengunduh motion adapter dan CLIP Vision (bundle)..."
+  if (-not (Test-HFConnection -MaxAttempts 3)) {
+    Write-Output "WAVES:ERROR Tidak ada koneksi ke HuggingFace (huggingface.co). Periksa internet / proxy / firewall, lalu coba lagi."
+    exit 1
+  }
+  $bundleBase = if ($Base -eq "server\storage\generate\image") { "server\storage\generate\video" } else { $Base }
+  Write-Output "WAVES:LOG [1/2] Motion Adapter AnimateDiff v1-5-2..."
+  & $PSCommandPath -RepoId "guoyww/animatediff-motion-adapter-v1-5-2" -Base $bundleBase -Folder "animate-diff/motion-adapter" -KeepRoot -Exclude "README.md,.gitattributes"
+  if ($LASTEXITCODE -ne 0) { Write-Output "WAVES:ERROR Motion adapter gagal (exit $LASTEXITCODE)"; exit $LASTEXITCODE }
+  Write-Output "WAVES:LOG [2/2] CLIP Vision ViT-Large/14..."
+  & $PSCommandPath -RepoId "openai/clip-vit-large-patch14" -Base $bundleBase -Folder "animate-diff/clip-vit-large" -KeepRoot -Exclude "pytorch_model.bin,flax_model.msgpack,tf_model.h5,README.md,.gitattributes"
+  if ($LASTEXITCODE -ne 0) { Write-Output "WAVES:ERROR CLIP Vision gagal (exit $LASTEXITCODE)"; exit $LASTEXITCODE }
+  Write-Output "WAVES:STAGE Verifikasi AnimateDiff..."
+  $check1 = Join-Path $projectRoot "$bundleBase/animate-diff/motion-adapter/diffusion_pytorch_model.fp16.safetensors"
+  $check1Alt = Join-Path $projectRoot "$bundleBase/animate-diff/motion-adapter/diffusion_pytorch_model.safetensors"
+  $check2 = Join-Path $projectRoot "$bundleBase/animate-diff/clip-vit-large/model.safetensors"
+  if (((Test-Path $check1) -or (Test-Path $check1Alt)) -and (Test-Path $check2)) {
+      Write-Output "WAVES:LOG AnimateDiff terpasang lengkap."
+  } else {
+      Write-Output "WAVES:LOG Peringatan: salah satu file AnimateDiff belum terdeteksi."
+  }
+  Write-Output "WAVES:DONE"
+  exit 0
+}
+
+$wanBundleIds = @("wan", "wan-bundle", "wan_t2v_13b", "wan2.1-t2v-1.3b")
+if ($RepoId -in $wanBundleIds) {
+  if ($Test) {
+    Write-Output "WAVES:STAGE Wan 2.1 T2V 1.3B - uji koneksi & daftar file (tidak download)..."
+    if (-not (Test-HFConnection -MaxAttempts 3)) {
+      Write-Output "WAVES:ERROR Tidak ada koneksi ke HuggingFace. Periksa internet lalu coba lagi."
+      exit 1
+    }
+    & $PSCommandPath -RepoId "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" -Base $wanBase -Folder $wanFolder -Exclude "*.jpg,*.JPG,*.jpeg,*.png,*.md,.gitattributes" -Test
+    exit $LASTEXITCODE
+  }
+  Write-Output "WAVES:STAGE Wan 2.1 T2V 1.3B - cek koneksi & unduh..."
+  if (-not (Test-HFConnection -MaxAttempts 3)) {
+    Write-Output "WAVES:ERROR Tidak ada koneksi ke HuggingFace. Periksa internet lalu coba lagi."
+    exit 1
+  }
+  $wanBase = if ($Base -eq "server\storage\generate\image") { "server\storage\generate\video" } else { $Base }
+  $wanFolder = if ($Folder) { $Folder } else { "wan" }
+  & $PSCommandPath -RepoId "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" -Base $wanBase -Folder $wanFolder -Exclude "*.jpg,*.JPG,*.jpeg,*.png,*.md,.gitattributes"
+  exit $LASTEXITCODE
+}
+
+Write-Output "WAVES:LOG Cek koneksi ke HuggingFace..."
+if (-not (Test-HFConnection -MaxAttempts 3)) {
+  Write-Output "WAVES:ERROR Tidak ada koneksi ke HuggingFace (huggingface.co). Periksa koneksi internet, proxy, atau firewall, lalu coba lagi."
+  exit 1
+}
+Write-Output "WAVES:LOG Koneksi OK."
+
+# Jika -Test, hanya uji daftar file tanpa download
+$testMode = $Test.IsPresent
+
 $excludePatterns = @()
 if ($Exclude) {
   $excludePatterns = $Exclude -split '[,;]' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 }
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
 $modelName = ($RepoId -split "/")[-1]
 if (-not $Folder) { $Folder = $modelName }
+if (-not $Base) { $Base = "server\storage\generate\image" }
 $root = Join-Path $projectRoot (Join-Path $Base $Folder)
-New-Item -ItemType Directory -Force -Path $root | Out-Null
+if (-not $testMode) { New-Item -ItemType Directory -Force -Path $root | Out-Null }
 
 $baseUrl = "https://huggingface.co/$RepoId/resolve/main"
 
@@ -52,6 +151,7 @@ function Get-HFJson([string]$url) {
     } catch {
       $msg = $_.Exception.Message
       $is429 = $msg -match "429|Too Many Requests"
+      $isConn = $msg -match "Unable to connect|No such host|Timeout|connection"
       $retryAfter = $null
       if ($_.Exception.Response) {
         $retryAfter = $_.Exception.Response.Headers["Retry-After"]
@@ -60,6 +160,7 @@ function Get-HFJson([string]$url) {
       if ($attempt -ge 10) { throw }
       if ($is429 -and $retryAfter) { $wait = [math]::Min([int]$retryAfter + 1, 60) }
       elseif ($is429) { $wait = [math]::Min(5 * $attempt, 60) }
+      elseif ($isConn) { $wait = [math]::Min(5 * $attempt, 30); Write-Output "WAVES:LOG Masalah koneksi, retry dalam $wait detik..." }
       else { $wait = 2 }
       Start-Sleep -Seconds $wait
     }
@@ -103,7 +204,7 @@ Write-Output ("WAVES:STAGE Mengambil daftar file dari HuggingFace...")
 Get-HFFiles ""
 
 if ($script:hfFiles.Count -eq 0) {
-  Write-Output "WAVES:ERROR Tidak ada file ditemukan di $RepoId"
+  Write-Output "WAVES:ERROR Tidak ada file ditemukan di $RepoId (mungkin koneksi terputus atau RepoId salah)"
   exit 1
 }
 
@@ -111,6 +212,12 @@ $KNOWN_TOTAL = 0L
 foreach ($f in $script:hfFiles) { $KNOWN_TOTAL += $f.size }
 
 Write-Output ("WAVES:LOG Ditemukan {0} file ({1} bytes total)" -f $script:hfFiles.Count, $KNOWN_TOTAL)
+
+if ($testMode) {
+  Write-Output ("WAVES:LOG Uji OK: {0} file bisa diakses ({1} bytes). Download bisa dilakukan - tidak ada file yang diunduh (mode Test)." -f $script:hfFiles.Count, $KNOWN_TOTAL)
+  Write-Output "WAVES:DONE"
+  exit 0
+}
 
 # --- Helpers ---
 function Get-Len([string]$path) {

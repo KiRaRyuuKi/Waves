@@ -205,6 +205,32 @@ Untuk backend production, jalankan uvicorn tanpa `--reload` di belakang reverse 
 - **`getaddrinfo failed` saat unduh bobot** — unduh manual checkpoint dengan `curl.exe -L` ke folder cache di atas, lalu restart backend.
 - **`pip install` gagal soal batas versi** — longgarkan batas atas versi di `vendor/stem/requirements_minimal.txt` (pola: `torchaudio>=0.8` tanpa batas atas).
 
+## 🧩 Vendor Forks
+
+Waves mem-vendor beberapa upstream agar offline-first dan mudah dipatch:
+
+| Vendor | Upstream | Catatan patch |
+|--------|----------|---------------|
+| `vendor/stem` | `facebookresearch/demucs` (MIT) | Patch `demucs/audio.py` hindari `torchaudio.save` → `soundfile` untuk `torchcodec` terbaru |
+| `vendor/vits` | VITS TTS (Apache-2.0) | Diisolasi untuk inferensi lokal |
+| `vendor/llama` | `ggml-org/llama.cpp` (MIT) | Bindings untuk LLM Hub (GGUF) — model besar di-ignore git (`*.gguf`) |
+| `vendor/coder` | ScreenCoder-style agent | Frontend + backend di-vendor untuk integrasi lokal — `node_modules`/`dist` di-ignore |
+
+Hindari edit `vendor/*` tanpa catat upstream commit/tag di PR. Lihat `CONTRIBUTING.md` → Vendor Forks.
+
+## 🤝 Contributing
+
+Lihat `CONTRIBUTING.md` untuk alur fork → branch → PR, dan `CODE_OF_CONDUCT.md` untuk etika komunitas.
+
+## 🔒 Security
+
+Laporkan vulnerability secara privat via `SECURITY.md` (jangan buka issue publik).
+
+## 📝 Changelog & Lisensi
+
+- Riwayat versi: `CHANGELOG.md` (saat ini `v1.1.5-preview`, Unreleased untuk `v1.2.0` stabil)
+- Lisensi: `LICENSE` (MIT) © 2026 Muhammad Ilham (KiRaRyuuKi). Third-party notices ada di footer `LICENSE`.
+
 ## 🐛 Bug Reports & Feature Requests
 
 Jika Anda menemukan bug atau ingin mengajukan fitur baru:
