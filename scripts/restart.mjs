@@ -15,6 +15,23 @@ const IS_WIN = platform() === "win32";
 const STATE_DIR = path.join(ROOT, ".waves");
 const STATE_FILE = path.join(STATE_DIR, "state.json");
 const LOG_DIR = path.join(STATE_DIR, "logs");
+const WAVES_LOG = path.join(LOG_DIR, "waves.log");
+const cliArgs = process.argv.slice(2);
+const IS_DAEMONIZED = cliArgs.includes("--daemonized") || process.env.WAVES_DAEMONIZED === "1";
+if (!IS_DAEMONIZED && !cliArgs.includes("--no-daemon")) {
+  mkdirSync(LOG_DIR, { recursive: true });
+  const fd = openSync(WAVES_LOG, "a");
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "--daemonized"], {
+    cwd: ROOT,
+    detached: true,
+    windowsHide: true,
+    stdio: ["ignore", fd, fd],
+    env: { ...process.env, WAVES_DAEMONIZED: "1" },
+  });
+  child.unref();
+  process.stdout.write(`restart daemonized (pid ${child.pid}) — log: .waves/logs/waves.log\n`);
+  process.exit(0);
+}
 
 // Kill PID lintas platform (duplikat dari stop.mjs supaya file ini mandiri tanpa import).
 // Windows butuh `taskkill /T /F`, Unix cukup `SIGTERM`.

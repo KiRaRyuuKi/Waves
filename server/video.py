@@ -79,7 +79,6 @@ def _load_json(path: Path) -> dict | None:
 
 
 def _dir_has_weights(folder: Path) -> bool:
-    """Folder dianggap 'berisi model' kalau ada file bobot diffusers/transformers."""
     if not folder.is_dir():
         return False
     for ext in (".safetensors", ".bin", ".ckpt"):
@@ -106,7 +105,6 @@ def _find_cover_in_dir(model_dir: Path) -> bool:
 
 
 def _sd_base_models() -> list[dict]:
-    """Daftar model SD di storage/generate/image yang bisa jadi dasar AnimateDiff."""
     if not AD_BASE_DIR.is_dir():
         return []
     out = []
@@ -378,8 +376,6 @@ def _load_wan_i2v(device: str):
 
 
 def _apply_init_image(frames, init_pil, target_w: int, target_h: int, strength: float):
-    """Blend gambar awal ke frame hasil (untuk img2vid fallback).
-    strength kecil = tetap mirip gambar, besar = lebih bebas."""
     from PIL import Image
 
     pil_frames = _to_pil_frames(frames)
@@ -409,8 +405,6 @@ def _apply_init_image(frames, init_pil, target_w: int, target_h: int, strength: 
 # ---------------------------------------------------------------------------
 
 def _to_pil_frames(frames):
-    """Normalisasi output pipeline (list PIL / np.ndarray / torch.Tensor) jadi
-    list PIL.Image yang siap di-encode."""
     import numpy as np
     import torch
     from PIL import Image
@@ -465,7 +459,6 @@ def _to_pil_frames(frames):
 
 
 def _encode_mp4_to_bytes(frames, fps: int) -> bytes:
-    """Encode frames jadi bytes mp4 via FFmpeg (tidak disimpan ke disk permanen, mirip image.py)."""
     import base64  # noqa: F401 - keep import check
 
     ffmpeg = shutil.which("ffmpeg")

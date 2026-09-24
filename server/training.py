@@ -188,8 +188,6 @@ def _base_model_speaker_id(base_model: str) -> int:
 
 @router.get("/base_models")
 async def list_base_models():
-    """Model yang siap di-tune (punya checkpoint valid). User memilih sendiri
-    model mana yang jadi dasar fine-tune — tidak ada base model tetap."""
     out = []
     for model in tts.list_models():
         if not model.get("ready"):

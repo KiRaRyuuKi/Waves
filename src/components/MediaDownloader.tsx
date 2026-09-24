@@ -361,7 +361,9 @@ export default function MediaDownloader() {
                   <div className="h-3 w-3 animate-spin rounded-full border-2 border-ink-muted border-t-transparent" />
                   Menyiapkan download{" "}
                   {downloading === "video" ? "video" : "audio"}…{" "}
-                  {downloadProgress > 0 ? `(${Math.round(downloadProgress)}%)` : ""}
+                  {downloadProgress > 0
+                    ? `(${Math.round(downloadProgress)}%)`
+                    : ""}
                 </span>
               )}
             </div>
@@ -374,6 +376,18 @@ export default function MediaDownloader() {
           </div>
           <div>Klik “Cari” untuk memilih kualitas.</div>
         </div>
+      </div>
+      <div
+        className="pointer-events-none absolute bottom-0 right-0 z-10 select-none overflow-visible"
+        aria-hidden
+      >
+        <img
+          src="/pixel-pokemon.gif"
+          alt=""
+          width={180}
+          height={56}
+          className="relative h-full w-full object-contain object-bottom opacity-95"
+        />
       </div>
     </main>
   );

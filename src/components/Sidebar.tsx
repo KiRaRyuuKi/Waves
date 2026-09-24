@@ -275,25 +275,6 @@ export default function Sidebar() {
       <div className="flex-shrink-0 overflow-visible px-2 pb-2">
         <style dangerouslySetInnerHTML={{ __html: fishKeyframes }} />
         <div className="relative overflow-visible rounded-md border border-edge bg-gradient-to-br from-white to-canvas-subtle p-3 shadow-soft">
-          <div
-            className="pointer-events-none absolute -right-2.5 -top-5 z-10 h-12 w-16 select-none overflow-hidden"
-            aria-hidden
-          >
-            <img
-              src="/pixel-fish.gif"
-              alt=""
-              width={64}
-              height={48}
-              className="h-full w-full object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.12)]"
-              style={
-                {
-                  imageRendering: "pixelated",
-                  animation: "fishBob 2.2s ease-in-out infinite",
-                } as CSSProperties
-              }
-            />
-          </div>
-
           <div className="mb-1.5 flex w-full items-center gap-1.5">
             <span className="text-[11px] font-semibold tracking-tight text-ink">
               Waves
@@ -355,23 +336,15 @@ export default function Sidebar() {
           </p>
 
           <div
-            className="pointer-events-none absolute bottom-1 left-1.5 z-10 h-12 select-none overflow-visible"
+            className="pointer-events-none absolute bottom-0 left-2.5 z-10 h-10 select-none overflow-visible"
             aria-hidden
           >
             <img
-              src="/pixel-monokuma.gif"
+              src="/pixel-capybara.gif"
               alt=""
               width={180}
               height={56}
               className="relative h-full w-full object-contain object-bottom opacity-95"
-              style={
-                {
-                  imageRendering: "pixelated",
-                  animation:
-                    "waveFloat 1.9s cubic-bezier(0.45,0,0.55,1) infinite",
-                  willChange: "transform",
-                } as CSSProperties
-              }
             />
           </div>
         </div>

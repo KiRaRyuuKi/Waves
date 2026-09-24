@@ -221,7 +221,7 @@ def _call_anthropic(prompt: str, image_b64: str, media_type: str, model: str, ap
         raise RuntimeError(f"Anthropic API error {e.code}: {detail}")
 
 def _call_gemini(prompt: str, image_b64: str, media_type: str, model: str, api_key: str) -> str:
-    m = model or "gemini-2.0-flash"
+    m = model or "gemini-3.6-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
     payload = {
         "contents": [{"role": "user", "parts": [
@@ -233,17 +233,27 @@ def _call_gemini(prompt: str, image_b64: str, media_type: str, model: str, api_k
     }
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            cands = body.get("candidates") or []
-            if not cands:
-                raise RuntimeError(f"Gemini empty: {body}")
-            parts = cands[0].get("content", {}).get("parts") or []
-            return "".join(p.get("text","") for p in parts)
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")[:2000]
-        raise RuntimeError(f"Gemini API error {e.code}: {detail}")
+    # Retry untuk 503/429/500 — Gemini sering 503 high demand
+    last_err = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+                cands = body.get("candidates") or []
+                if not cands:
+                    raise RuntimeError(f"Gemini empty: {body}")
+                parts = cands[0].get("content", {}).get("parts") or []
+                return "".join(p.get("text","") for p in parts)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")[:2000]
+            last_err = RuntimeError(f"Gemini API error {e.code}: {detail}")
+            # 503/429/500 = transient, retry dengan backoff
+            if e.code in (503, 429, 500, 502, 504) and attempt < 2:
+                wait = 2 * (attempt + 1) + (attempt * 2)  # 2s, 6s
+                time.sleep(wait)
+                continue
+            raise last_err
+    raise last_err or RuntimeError("Gemini call failed after retries")
 
 def _call_ollama_vision(prompt: str, image_b64: str, model: str) -> str:
     # Ollama vision models: qwen2.5vl, llava, gemma3 etc via /api/chat
@@ -370,7 +380,7 @@ def _default_model(provider: str) -> str:
     return {
         "openai": "gpt-4o-mini",
         "anthropic": "claude-sonnet-4-20240620",
-        "gemini": "gemini-2.0-flash",
+        "gemini": "gemini-3.6-flash",
         "ollama": "qwen2.5vl:7b",
     }.get(provider, "")
 
@@ -443,8 +453,6 @@ async def save_config(req: CoderConfigRequest):
 
 @router.get("/config/raw")
 async def get_config_raw():
-    """Kembalikan isi mentah server/storage/coder/config.json untuk editor langsung.
-    Dipakai oleh icon gerigi -> buka editor. Tidak pernah 404: auto-create jika belum ada."""
     path = CONFIG_PATH
     # Auto-create default jika belum ada — jangan return not found
     if not path.is_file():
@@ -486,8 +494,6 @@ class CoderRawConfigRequest(BaseModel):
 
 @router.put("/config/raw")
 async def put_config_raw(req: CoderRawConfigRequest):
-    """Simpan editor mentah -> overwrite server/storage/coder/config.json.
-    Validasi JSON; cegah path traversal (hanya file ini yang boleh ditulis)."""
     text = (req.raw or "").strip()
     if not text and req.parsed is not None:
         text = json.dumps(req.parsed, indent=2, ensure_ascii=False)
@@ -619,26 +625,56 @@ Return ONLY the full updated HTML file in a fenced block."""
                 key = _get_api_key("gemini") or ""
                 sys_prompt = _get_system_prompt() + "\n\n" + STACK_INSTRUCTIONS.get(req.stack, "")
                 m = model
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
-                payload = {
-                    "contents": [{"role":"user","parts":[
-                        {"inline_data":{"mime_type":mime,"data":b64}},
-                        {"text": user_prompt}
-                    ]}],
-                    "systemInstruction": {"parts":[{"text": sys_prompt}]},
-                    "generationConfig": {"temperature":0.2,"maxOutputTokens":9000}
-                }
-                data = json.dumps(payload).encode("utf-8")
-                rq = urllib.request.Request(url, data=data, headers={"Content-Type":"application/json"}, method="POST")
-                try:
-                    with urllib.request.urlopen(rq, timeout=150) as resp:
-                        body = json.loads(resp.read().decode("utf-8"))
-                        cands = body.get("candidates") or []
-                        parts = cands[0].get("content",{}).get("parts") or [] if cands else []
-                        raw = "".join(p.get("text","") for p in parts)
-                except urllib.error.HTTPError as e:
-                    detail = e.read().decode("utf-8", errors="replace")[:3000]
-                    raise RuntimeError(f"Gemini {e.code}: {detail}")
+                # Retry + fallback untuk 503 high demand
+                fallbacks = [m, "gemini-3.5-flash", "gemini-3-flash-preview"] if m not in ("gemini-3.5-flash", "gemini-3-flash-preview") else [m]
+                # deduplicate preserve order
+                seen = set()
+                fallbacks = [x for x in fallbacks if not (x in seen or seen.add(x))]
+                last_err = None
+                raw = ""
+                for fb_model in fallbacks:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{fb_model}:generateContent?key={key}"
+                    payload = {
+                        "contents": [{"role":"user","parts":[
+                            {"inline_data":{"mime_type":mime,"data":b64}},
+                            {"text": user_prompt}
+                        ]}],
+                        "systemInstruction": {"parts":[{"text": sys_prompt}]},
+                        "generationConfig": {"temperature":0.2,"maxOutputTokens":9000}
+                    }
+                    data = json.dumps(payload).encode("utf-8")
+                    rq = urllib.request.Request(url, data=data, headers={"Content-Type":"application/json"}, method="POST")
+                    for attempt in range(3):
+                        try:
+                            store.update(job_id, progress=30 + attempt*5, stage=f"Menunggu respon LLM ({fb_model} coba {attempt+1}/3)")
+                            with urllib.request.urlopen(rq, timeout=150) as resp:
+                                body = json.loads(resp.read().decode("utf-8"))
+                                cands = body.get("candidates") or []
+                                parts = cands[0].get("content",{}).get("parts") or [] if cands else []
+                                raw = "".join(p.get("text","") for p in parts)
+                            last_err = None
+                            break
+                        except urllib.error.HTTPError as e:
+                            detail = e.read().decode("utf-8", errors="replace")[:3000]
+                            last_err = RuntimeError(f"Gemini {e.code} ({fb_model}): {detail}")
+                            # 503/429/500 = transient — retry, kalau masih gagal coba fallback model
+                            if e.code in (503, 429, 500, 502, 504) and attempt < 2:
+                                wait = 3 * (attempt + 1)
+                                store.update(job_id, stage=f"Gemini sibuk (503) — retry {attempt+1}/3 dalam {wait}s...")
+                                time.sleep(wait)
+                                continue
+                            # jangan retry lagi untuk model ini, lanjut ke fallback
+                            break
+                        except Exception as e:
+                            last_err = e
+                            break
+                    if raw and raw.strip():
+                        if fb_model != m:
+                            store.update(job_id, stage=f"Fallback ke {fb_model} berhasil")
+                        m = fb_model  # untuk result metadata
+                        break
+                if last_err and not raw:
+                    raise last_err
             elif provider == "ollama":
                 raw = _call_ollama_vision(user_prompt, b64, model)
             else:
@@ -666,18 +702,22 @@ Return ONLY the full updated HTML file in a fenced block."""
                 "raw": raw[:120000],
                 "stack": req.stack,
                 "provider": provider,
-                "model": model,
+                "model": m if provider == "gemini" else model,
             })
         except HTTPException as exc:
             store.update(job_id, status=JobStatus.ERROR, stage="Gagal", error=str(exc.detail) if hasattr(exc,"detail") else str(exc))
         except Exception as exc:
             msg = str(exc)
-            # friendly OOM / quota hints
+            # friendly hints
             low = msg.lower()
             if "quota" in low or "billing" in low:
                 msg = f"Kuota/billing habis untuk {provider}. Cek dashboard provider. Detail: {exc}"
             elif "api key" in low or "authentication" in low or "unauthorized" in low:
                 msg = f"API key {provider} tidak valid / belum diatur. Atur di Screen Coder → Pengaturan Provider. Detail: {exc}"
+            elif "503" in low or "unavailable" in low or "high demand" in low:
+                msg = f"Gemini sedang overload (503 high demand) - server sudah retry 3x + fallback ke gemini-3.5-flash/3-flash-preview. Silakan coba Generate lagi dalam 30-60 detik, atau ganti model ke gemini-3.5-flash / openai gpt-4o-mini. Detail: {exc}"
+            elif "429" in low or "rate" in low:
+                msg = f"Rate limit / terlalu banyak request. Tunggu sebentar lalu coba lagi, atau ganti provider. Detail: {exc}"
             store.update(job_id, status=JobStatus.ERROR, stage="Gagal", error=msg[:4000])
 
     threading.Thread(target=_run, daemon=True).start()

@@ -22,15 +22,15 @@ PROJECT_ROOT = SERVER_DIR.parent
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 
 # Target storage locations (consistent with PS1 script and downloader).
-TORCH_DIR = PROJECT_ROOT / "server" / "storage" / "torch"   # wheel torch+torchaudio (bersarang dalam whls/)
+TORCH_DIR = PROJECT_ROOT / "server" / "storage" / "torch" 
 GENERATE_DIR = PROJECT_ROOT / "server" / "storage" / "generate"
 IMAGE_DIR = GENERATE_DIR / "image"
 TINYSD_DIR = IMAGE_DIR / "tiny-sd"
-DIFFUSERS_DIR = IMAGE_DIR  # alias untuk kompatibilitas
+DIFFUSERS_DIR = IMAGE_DIR  
 SD15_DIR = IMAGE_DIR / "stable-diffusion"
 DREAMSHAPER_DIR = IMAGE_DIR / "dream-shaper"
 
-# Video models (Video Generation feature) — see server/video.py.
+# Video models (Video Generation feature), see server/video.py.
 VIDEO_DIR = GENERATE_DIR / "video"
 ANIMATEDIFF_DIR = VIDEO_DIR / "animate-diff"
 AD_MOTION_DIR = ANIMATEDIFF_DIR / "motion-adapter"
@@ -52,8 +52,8 @@ TINYSD_TOTAL = (
 # Estimasi ukuran pipeline diffusers (unet+vae+text_encoder) di cloud —
 # dipakai utk total progres sebelum file benar2 ada di disk. Saat sudah
 # terpasang, _task_state memakai ukuran aktualnya.
-SD15_TOTAL = 4265380512                   # v1-5-pruned-emaonly.ckpt (safetensors 4265146304 dibulatkan)
-DREAMSHAPER_TOTAL = 4265203904            # DreamShaper_4BakedVae-inpainting versi fp32
+SD15_TOTAL = 4265380512                     # v1-5-pruned-emaonly.ckpt (safetensors 4265146304 dibulatkan)
+DREAMSHAPER_TOTAL = 4265203904              # DreamShaper_4BakedVae-inpainting versi fp32
 
 # --- Model video (fitur Video Generation) ---
 # AnimateDiff: motion adapter (v1-5-2, fp16) + CLIP vision (model.safetensors).
@@ -76,7 +76,7 @@ TINYSD_BIG = {
     "vae/diffusion_pytorch_model.bin": 167407857,
 }
 
-# Bobot Demucs (per-model) — nama persis file di cache torch hub.
+# Bobot Demucs (per-model), nama persis file di cache torch hub.
 # Hanya dihitung jika ukuran sudah pas dengan server (byte akurat).
 STEM_HTDEMUCS = {
     "955717e8-8726e21a.th": 84141911,
@@ -112,9 +112,6 @@ def _len(path: Path) -> int:
 
 
 def _dir_bytes(directory: Path, rel_map: dict[str, int], glob_all: bool = False) -> int:
-    """Jumlah byte di folder yang sudah benar (capped ke ukuran yang
-    diketahui). Kalau glob_all, hitung semua file (untuk menentukan
-    folder sudah "ada isi")."""
     total = 0
     for rel, expected in rel_map.items():
         f = directory / rel
@@ -124,9 +121,6 @@ def _dir_bytes(directory: Path, rel_map: dict[str, int], glob_all: bool = False)
 
 
 def _dir_bytes_prefix(directory: Path, prefix_map: dict[str, int]) -> int:
-    """Versi untuk file yang versinya bisa beda (mis. torch-2.14.0 vs
-    torch-2.11.0): cari file di seluruh subfolder yang namanya diawali
-    prefix, lalu cap ke ukuran yang diketahui per prefix."""
     total = 0
     if not directory.is_dir():
         return total
@@ -141,7 +135,6 @@ def _dir_bytes_prefix(directory: Path, prefix_map: dict[str, int]) -> int:
 
 
 def _task_state(task_id: str) -> dict:
-    """Status singkat per task: apakah sudah terunduh / terpasang."""
     task = next((t for t in TASKS if t["id"] == task_id), None)
     if task is None:
         raise HTTPException(404, "Task tidak dikenal")
@@ -357,7 +350,6 @@ TASKS = [
 
 @router.get("/tasks")
 async def list_tasks():
-    """Daftar tugas setup lengkap dengan status tersimpan di disk."""
     result = []
     for t in TASKS:
         state = _task_state(t["id"])
@@ -384,7 +376,6 @@ async def list_tasks():
 # =====================================================================
 
 def _suggested_pythons() -> list[str]:
-    """Daftar python yang tersedia di sistem (py -0p + where python)."""
     found: list[str] = []
     seen: set[str] = set()
 
@@ -517,7 +508,6 @@ def _unpersist_job(job_id: str) -> None:
 
 
 def _persist_waves(job: SetupJob, line: str) -> None:
-    """Simpan baris protokol WAVES ke log permanen taska untuk pemulihan."""
     try:
         WAVES_LOG_DIR.mkdir(parents=True, exist_ok=True)
         with open(_download_log(job.id), "a", encoding="utf-8") as f:
@@ -551,7 +541,6 @@ def _pid_alive(pid: int) -> bool:
 
 
 def _kill_tree(pid: int) -> None:
-    """Bunuh proces beserta seluruh anaknya (powershell + curl)."""
     if pid <= 0:
         return
     try:
@@ -564,7 +553,6 @@ def _kill_tree(pid: int) -> None:
 
 
 def _prime_job_from_log(job: SetupJob) -> None:
-    """Saat memulihkan job, isi stage/log/progress dari log permanen."""
     try:
         lines = _download_log(job.id).read_text(encoding="utf-8").splitlines()
     except OSError:
@@ -593,8 +581,6 @@ def _prime_job_from_log(job: SetupJob) -> None:
 
 
 def _monitor_orphan(job: SetupJob) -> None:
-    """Pantau job yang dipulihkan: progress dihitung dari disk; saat PID
-    mati, job dianggap selesai/dijeda."""
     last = 0.0
     last_done = job.done_bytes
     while _pid_alive(job._pid):
@@ -685,8 +671,6 @@ class SetupJobStore:
             return self._jobs.get(job_id)
 
     def active_for_task(self, task_id: str) -> Optional[SetupJob]:
-        """Job yang masih berjalan untuk task ini (biar klik ulang tidak
-        men-spawn proses unduh kedua ke folder yang sama)."""
         with self._lock:
             for job in self._jobs.values():
                 if job.task_id == task_id and not job._finished:
@@ -888,9 +872,6 @@ async def run_task(
     python_path: str | None = None,
     install: bool = False,
 ):
-    """Mulai unduh & (opsional) install task. Untuk `torch`, beri
-    `python_path` + `install=True` kalau mau wheels dipasang ke Python
-    tujuan (system/venv) sehingga bisa dipanggil tanpa unduh ulang."""
     task = next((t for t in TASKS if t["id"] == task_id), None)
     if task is None:
         raise HTTPException(404, "Task tidak dikenal")
@@ -1016,8 +997,6 @@ async def _sse_stream(job_id: str):
 
 @router.get("/jobs")
 async def list_jobs():
-    """Semua job setup (dipakai UI untuk melanjutkan pantauan setelah
-    modal dibuka ulang / halaman di-refresh — job hidup di memori)."""
     jobs = store.all()
     return {"jobs": [_event_payload(j, interpolate=False) for j in jobs]}
 
@@ -1048,7 +1027,6 @@ async def stream_job(job_id: str):
 
 @router.post("/jobs/{job_id}/stop")
 async def stop_job(job_id: str):
-    """Hentikan proses unduh job tanpa merusak file yang sudah terunduh."""
     job = store.get(job_id)
     if job is None:
         raise HTTPException(404, "Job tidak ditemukan")
@@ -1070,11 +1048,6 @@ async def stop_job(job_id: str):
 
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str):
-    """Hapus model gambar dari disk (khusus kategori 'model').
-
-    Proses yang masih hidup (aktif) untuk task ini diterminasi dulu,
-    lalu folder tujuan (check_dir) dihapus beserta isinya.
-    """
     task = next((t for t in TASKS if t["id"] == task_id), None)
     if task is None:
         raise HTTPException(404, "Task tidak dikenal")

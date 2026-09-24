@@ -30,7 +30,6 @@ OLLAMA_URL = "http://127.0.0.1:11434"
 LMSTUDIO_URL = "http://127.0.0.1:1234"
 
 def _ollama_dir() -> Path:
-    """Folder default Ollama: %USERPROFILE%\\.ollama atau $HOME/.ollama, atau $OLLAMA_MODELS."""
     import os
     env = os.environ.get("OLLAMA_MODELS")
     if env:
@@ -1121,7 +1120,6 @@ async def convert_status():
 
 @router.post("/convert/setup")
 async def convert_setup():
-    """Clone llama.cpp otomatis agar bisa jalan lokal — dipanggil tombol Setup di frontend."""
     with _clone_lock:
         if _clone_job["status"] == "running":
             return {"status": "running", "progress": _clone_job["progress"], "log": _clone_job["log"][-20:], "hint": "Setup sedang berjalan…"}

@@ -24,14 +24,6 @@ OUTPUT_ROOT = STORAGE_ROOT / "separated"
 
 
 def _iter_lines(stream) -> "tp.Iterator[str]":
-    """Yield each terminal 'line' from a subprocess stream, splitting on
-    both \\n and \\r. tqdm (used for both demucs' own progress bars and
-    torch's model-download progress) redraws a line in place with \\r —
-    Python's default line iteration only splits on \\n, so a redraw can
-    merge with whatever comes right after it into one unflushed chunk,
-    and if the process dies mid-redraw that chunk (often containing the
-    real error) never gets yielded at all. Splitting on \\r too avoids that.
-    """
     buffer = ""
     while True:
         chunk = stream.read(256)

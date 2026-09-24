@@ -170,8 +170,6 @@ async def get_job(job_id: str):
 
 @app.post("/api/jobs/{job_id}/retry")
 async def retry_job(job_id: str):
-    """Retry separation for a failed job. The original file persisted on disk
-    is reused, so re-upload is not required."""
     job = store.get(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")
@@ -209,7 +207,6 @@ async def retry_job(job_id: str):
 
 @app.delete("/api/jobs/{job_id}")
 async def delete_job(job_id: str, request: Request):
-    """Delete a job and its associated source file, separation output, and history."""
     job = store.get(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")

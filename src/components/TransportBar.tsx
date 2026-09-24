@@ -60,7 +60,7 @@ export default function TransportBar({ isPlaying, currentTime, duration, onPlayP
       </div>
 
       <button
-        className="btn"
+        className="btn w-40"
         disabled={exporting}
         onClick={async () => {
           setExporting(true);

@@ -56,7 +56,6 @@ def _load_json(path: Path) -> dict | None:
 
 
 def _load_info_index() -> dict:
-    """Catalog karakter (info.json) yang ditempel di akar MODELS_DIR."""
     raw = _load_json(MODELS_DIR / "info.json")
     return raw if isinstance(raw, dict) else {}
 
@@ -73,7 +72,6 @@ def _display_name(info: dict) -> str:
 
 
 def _is_lfs_pointer(path: Path) -> bool:
-    """Checkpoint yang masih pointer Git LFS (file kecil 'version https://git-lfs...')."""
     try:
         with open(path, "rb") as f:
             head = f.read(64)
@@ -105,10 +103,6 @@ def _real_checkpoint_candidates(model_dir: Path) -> list[Path]:
 
 
 def _shared_weights_path(size: int) -> Path | None:
-    """Cari file .pth asli (bukan pointer) dengan ukuran byte yang sama di koleksi.
-    Kumpulan karakter di folder ini adalah satu model multi-speaker yang disalin per
-    karakter — selama pointer LFS-nya menyebut ukuran yang sama, bobotnya bisa dipakai
-    bersama dari file yang sudah ter-download."""
     if not MODELS_DIR.exists():
         return None
     for entry in sorted(MODELS_DIR.iterdir()):
@@ -135,7 +129,6 @@ def _model_is_ready(model_dir: Path) -> bool:
 
 
 def _game_of(info: dict) -> str:
-    """Nama game/franchise diurai dari prefix title (mis. "Honkai: Star Rail-カフカ")."""
     title = str(info.get("title") or "")
     if "-" in title:
         return title.split("-", 1)[0].strip()
@@ -143,16 +136,6 @@ def _game_of(info: dict) -> str:
 
 
 def list_models() -> list[dict]:
-    """Scan MODELS_DIR dan tampilkan tiap karakter sebagai model.
-
-    Prioritas metadata per folder:
-      1. meta.json (model lama/kustom) — dipakai apa adanya.
-      2. info.json (catalog karakter) — nama karakter dipakai sebagai nama model;
-         `sid` darinya jadi speaker default, jadi user cukup memilih NAMA karakter,
-         tidak perlu tahu id numerik.
-    Sebuah folder cukup berisi `*.pth` untuk dikenali; `config.json` bisa juga
-    diabaikan karena DefaultConfig dipakai otomatis (lihat _get_or_load).
-    """
     if not MODELS_DIR.exists():
         return []
     index = _load_info_index()
@@ -284,10 +267,6 @@ _ZH_HAN_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
 def _tag_missing_language(text: str) -> str:
-    """Cleaner zh_ja_mixture hanya memproses segmen yang dibungkus [JA]...[JA]
-    atau [ZH]...[ZH]; teks yang tidak bertanda dibiarkan apa adanya (kalau yang
-    dibiarkan itu kana/kanji, nilainya di luar tabel simbol dan jadi len 1 /
-    senyap). Kalau user belum menandai bahasanya, deteksi otomatis dan bungkus."""
     if "[JA]" in text or "[ZH]" in text:
         return text
     if _JA_KANA_RE.search(text):

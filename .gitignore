@@ -1,12 +1,13 @@
 __pycache__/
 *.pyc
 
-# Waves runtime storage (jangan commit model/hasil)
+# Waves runtime storage
 server/storage/generate/video/*/
 server/storage/generate/image/*/
 server/storage/llm/*
 server/storage/coder/*
 server/storage/models/*/*.pth
+server/storage/remover/*
 server/storage/separated/*
 server/storage/torch/*
 server/storage/training/*
@@ -32,12 +33,11 @@ venv/
 .waves
 
 *.pth
-# GGUF tidak di-commit (kecuali vocab kecil yang dibutuhkan build)
 *.gguf
 *.bin
 
 *.log
 
-.DS_Store
 *.backup.gif
 *.backup.*
+.DS_Store

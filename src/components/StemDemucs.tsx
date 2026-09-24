@@ -399,7 +399,7 @@ export default function StemDemucs() {
               Coba ulang pemisahan
             </button>
             <button className="btn" onClick={handleReset}>
-              Track baru
+              Track Baru
             </button>
           </div>
         </div>

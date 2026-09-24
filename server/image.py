@@ -77,7 +77,6 @@ def _meta(model_dir: Path) -> dict:
 
 
 def _pretty_name(model_id: str) -> str:
-    """Convert a folder id into a display name, e.g. 'tiny-sd' -> 'Tiny SD'."""
     words = [w for w in re.split(r"[-_\s]+", model_id.strip()) if w]
     out = []
     for w in words:
@@ -97,8 +96,6 @@ def _find_cover(model_dir: Path) -> Path | None:
 
 
 def list_models() -> list[dict]:
-    """Return all known image models (including not yet downloaded) with installed flag,
-    plus any custom models found in the directory."""
     # Known models from Setup tasks (image)
     known_defs = [
         {"id": "tiny-sd", "name": "Tiny SD", "description": "Model Stable Diffusion ringan (~1 GB) untuk Image Generation."},
@@ -211,8 +208,6 @@ def _get_or_load(model_id: str, device: str = "cpu"):
 
 
 def _img2img_pipe(pipe: object, device: str = "cpu"):
-    """Build an img2img pipeline that reuses already loaded components
-    to avoid loading a separate model twice (saves VRAM/RAM)."""
     import torch
     from diffusers import StableDiffusionImg2ImgPipeline
 
@@ -246,8 +241,6 @@ def generate(
     device: str = "cpu",
     on_step: object | None = None,
 ) -> tuple[list[bytes], int | None]:
-    """Run the pipeline and return (list of PNG bytes, used seed).
-    on_step: optional callback_on_step_end callable(step-aware) untuk update progress."""
     import torch
 
     pipe = _get_or_load(model_id, device)
@@ -349,8 +342,6 @@ class GenerateRequest(BaseModel):
 
 @router.post("/generate")
 async def generate_image(req: GenerateRequest):
-    """Async job: kembalikan job_id, frontend polling GET /api/generate/jobs/{id}.
-    Tetap kompatibel: jika client lama menunggu JSON images, polling akan selesai cepat."""
     try:
         resolved_device = devices.resolve_device(req.device)
     except ValueError as exc:

@@ -92,6 +92,29 @@ const ASSUME_YES = args.includes("--yes");
 const NO_BROWSER = args.includes("--no-browser");
 const TTY = process.stdin.isTTY === true && !process.env.CI;
 
+const IS_DAEMONIZED = args.includes("--daemonized") || process.env.WAVES_DAEMONIZED === "1";
+const WANTS_DAEMON_EARLY =
+  !args.includes("--no-daemon") &&
+  !TTY &&
+  modeArg !== "start" &&
+  (actionArg === "background" || args.includes("--daemon") || args.includes("--yes"));
+
+if (WANTS_DAEMON_EARLY && !IS_DAEMONIZED) {
+  mkdirSync(LOG_DIR, { recursive: true });
+  const wavesLog = path.join(LOG_DIR, "waves.log");
+  const fd = openSync(wavesLog, "a");
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...args, "--daemonized"], {
+    cwd: ROOT,
+    detached: true,
+    windowsHide: true,
+    stdio: ["ignore", fd, fd],
+    env: { ...process.env, WAVES_DAEMONIZED: "1", FORCE_COLOR: "1" },
+  });
+  child.unref();
+  INFO(`start daemonized (pid ${child.pid}) — log: .waves/logs/waves.log`);
+  process.exit(0);
+}
+
 // ---------------------------------------------------------------------------
 // Manajemen state PID (agar server bisa di-stop/restart dari UI)
 // ---------------------------------------------------------------------------
@@ -601,13 +624,31 @@ async function main() {
   const isBuilt = existsSync(path.join(ROOT, ".next", "BUILD_ID"));
 
   if (isStart && !isBuilt) {
-    WARN(
-      "Belum ada build produksi (.next/BUILD_ID). Menjalankan `npm run build`…",
-    );
+    WARN("Belum ada build produksi (.next/BUILD_ID). Menjalankan `npm run build`…");
     if (run("npm", ["run", "build"]) !== 0) {
-      fatal("npm run build gagal.");
+      fatal("npm run build gagal. Cek log di atas / .waves/logs/waves.log");
       return;
     }
+    STEP("Build produksi selesai.");
+  }
+
+  if (isStart && !IS_DAEMONIZED && !args.includes("--no-daemon")) {
+    mkdirSync(LOG_DIR, { recursive: true });
+    const wavesLog = path.join(LOG_DIR, "waves.log");
+    const fd = openSync(wavesLog, "a");
+    const daemonArgs = [`--mode=start`, `--action=background`, "--yes", ...(NO_BROWSER || action !== "web" ? ["--no-browser"] : []), "--daemonized"];
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...daemonArgs], {
+      cwd: ROOT,
+      detached: true,
+      windowsHide: true,
+      stdio: ["ignore", fd, fd],
+      env: { ...process.env, WAVES_DAEMONIZED: "1", FORCE_COLOR: "1" },
+    });
+    child.unref();
+    INFO(`Production                : ${FE_URL} (pid ${child.pid})`);
+    INFO(`Status                    : npx waves status | npx waves logs`);
+    INFO(`Logs                      : ${C.dim}.waves/logs/waves.log${C.reset}`);
+    process.exit(0);
   }
 
   const nextDevBin = path.join(
@@ -656,14 +697,14 @@ async function main() {
   // Menghindari race di mana Next proxy /api/* ke backend yang belum bind ke health-check sequential memastikan urutan benar.
   const beReady = await waitBackendReady();
 
-  // ---- frontend ----
-  INFO(`Memulai frontend (Next.js) di ${FE_URL}…`);
+  // ---- frontend ---- dev & prod sama: full background daemon (log hanya ke file, banner ▲ Next.js tidak bocor)
+  INFO(`Memulai frontend (Next.js) di ${FE_URL}… (background daemon)`);
   const frontend = spawnBackground(
     process.execPath,
     [selectedBin, ...nextArgs],
     path.join(LOG_DIR, "frontend.log"),
   );
-  INFO(`frontend pid ${frontend.pid}`);
+  INFO(`frontend pid ${frontend.pid} (detached)`);
 
   // Simpan PID ke state agar bisa di-stop/restart dari UI.
   // Tanpa file, tombol di sidebar tidak tahu PID mana yang harus di-kill — state jadi sumber kebenaran tunggal.
@@ -686,9 +727,7 @@ async function main() {
     INFO(`Aplikasi siap: ${C.bold}${FE_URL}${C.reset}`);
     INFO(`Hentikan                  : ${C.bold}npm stop waves${C.reset}`);
     INFO(`Restart                   : ${C.bold}npm restart waves${C.reset}`);
-    INFO(
-      `Logs                      : ${C.dim}.waves/logs/{backend,frontend}.log${C.reset}`,
-    );
+    INFO(`Logs                      : ${C.dim}.waves/logs/{backend,frontend}.log${C.reset}`);
     if (action === "web") openBrowser();
   } else {
     WARN(

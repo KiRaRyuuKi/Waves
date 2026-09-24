@@ -38,15 +38,11 @@ class Job:
 
 
 def _default_filename(job_dir: Path) -> str:
-    """Best-effort original filename for a job directory whose record was
-    rebuilt from disk (the real name is not stored anywhere else). Uploads
-    disimpan sebagai <job_id>.<ext>, jadi ambil file pertama di folder."""
     files = sorted(f for f in job_dir.iterdir() if f.is_file())
     return files[0].name if files else job_dir.name
 
 
 def _finish_from_disk(job: Job) -> None:
-    """Mark a rebuilt job as done if separated output exists on disk."""
     if not SEPARATED_ROOT.is_dir():
         return
     # Upload disimpan sebagai <job_id>.<ext>, jadi stem-nya = job.id, dan
@@ -111,9 +107,6 @@ class JobStore:
     # --- Disk reconciliation ---
 
     def _reconcile(self) -> None:
-        """Rebuild records for uploads on disk that are missing from the
-        snapshot, and fail stale non-terminal jobs (a server restart kills
-        the separation subprocess, so they can never finish)."""
         with self._lock:
             for job_id in list(self._jobs):
                 job = self._jobs[job_id]

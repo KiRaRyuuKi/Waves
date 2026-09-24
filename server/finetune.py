@@ -48,8 +48,6 @@ def _base_checkpoint(model_id: str) -> Path:
 
 
 def _loop_extend(audio: np.ndarray, target: int, sampling_rate: int) -> np.ndarray:
-    """Ulangi klip pendek sampai mencapai target, dengan crossfade 20 ms agar
-    putaran tidak berbunyi klik/hard boundary."""
     if audio.shape[0] >= target:
         return audio
     cf = min(int(sampling_rate * 0.02), audio.shape[0])
@@ -133,8 +131,6 @@ def _text_to_ids(text: str, hps) -> list[int]:
 
 
 def load_dataset(dataset_dir: Path) -> tuple[list[dict], list[str]]:
-    """Membaca folder dataset (audio + transcripts.json). Kembalikan item
-    audio+teks (sudah diubah menjadi tensor) dan daftar deskripsi untuk log."""
     meta_path = dataset_dir / "transcripts.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     import utils as vits_utils
@@ -196,7 +192,6 @@ def train_session(
     save_every: int = 100,
     device: str = "cpu",
 ) -> None:
-    """Jalan di thread background; session = dict status yang dibaca UI."""
     import commons
     import models as vits_models
     import utils as vits_utils

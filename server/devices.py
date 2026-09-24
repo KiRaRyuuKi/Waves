@@ -32,11 +32,6 @@ def available_devices() -> list[str]:
 
 
 def resolve_device(device: str) -> str:
-    """Ubah pilihan user menjadi device betulan ('cpu'/'cuda').
-
-    'auto' / kosong -> CUDA kalau tersedia, kalau tidak CPU. 'cuda' eksplisit
-    saat GPU tidak ada -> ValueError supaya bisa dilaporkan sebagai 400.
-    """
     choice = (device or AUTO).strip().lower() or AUTO
     if choice not in _ALLOWED:
         raise ValueError(f"Device tak dikenal: '{device}'.")
@@ -48,8 +43,6 @@ def resolve_device(device: str) -> str:
 
 
 def _ram_info() -> dict | None:
-    """Total & sisa RAM sistem (bytes). Pakai ctypes di Windows agar tanpa
-    dependensi ekstra (psutil belum ada di requirements)."""
     try:
         if sys.platform == "win32":
 
@@ -81,7 +74,6 @@ def _ram_info() -> dict | None:
 
 
 def _gpu_info() -> dict | None:
-    """Info GPU pertama kalau CUDA tersedia (pakai torch yang sudah diinstall)."""
     try:
         import torch
 

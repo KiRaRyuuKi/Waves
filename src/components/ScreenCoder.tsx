@@ -40,8 +40,8 @@ const PROVIDER_META: Record<
   },
   gemini: {
     label: "Gemini",
-    placeholder: "AIza... / gemini-2.0-flash",
-    models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"],
+    placeholder: "AIza... / gemini-3.6-flash",
+    models: ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
   },
   ollama: {
     label: "Ollama (Lokal)",

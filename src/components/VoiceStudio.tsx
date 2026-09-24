@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { coverUrl, fetchVoiceModels, synthesizeVoice, type VoiceModelInfo } from "../lib/voiceApi";
+import {
+  coverUrl,
+  fetchVoiceModels,
+  synthesizeVoice,
+  type VoiceModelInfo,
+} from "../lib/voiceApi";
 import Dropdown, { type DropdownOption } from "./Dropdown";
 import { useDevice } from "../lib/deviceContext";
 import { BACKEND_DOWN_HINT, isBackendDown } from "../lib/api";
@@ -54,7 +59,13 @@ export default function VoiceStudio() {
       .catch((err) => {
         const down = isBackendDown(err);
         setBackendDown(down);
-        setLoadError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal memuat daftar model.");
+        setLoadError(
+          down
+            ? BACKEND_DOWN_HINT
+            : err instanceof Error
+              ? err.message
+              : "Gagal memuat daftar model.",
+        );
       });
   }, []);
 
@@ -77,9 +88,13 @@ export default function VoiceStudio() {
       games.map((g) => ({
         id: g.game,
         label: g.game,
-        right: <span className="flex-shrink-0 text-[11px] text-ink-muted">{g.items.length}</span>,
+        right: (
+          <span className="flex-shrink-0 text-[11px] text-ink-muted">
+            {g.items.length}
+          </span>
+        ),
       })),
-    [games]
+    [games],
   );
 
   const characterOptions: DropdownOption[] = useMemo(
@@ -94,16 +109,20 @@ export default function VoiceStudio() {
             alt=""
             width={28}
             height={28}
-            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+            onError={(e) =>
+              ((e.target as HTMLImageElement).style.display = "none")
+            }
             className="flex-shrink-0 rounded-[5px] object-cover"
           />
         ),
         right:
           m.ready === false ? (
-            <span className="flex-shrink-0 text-[11px] text-amber-600">belum siap</span>
+            <span className="flex-shrink-0 text-[11px] text-amber-600">
+              belum siap
+            </span>
           ) : undefined,
       })),
-    [visibleModels]
+    [visibleModels],
   );
 
   const handleGameChange = (gameId: string) => {
@@ -127,7 +146,15 @@ export default function VoiceStudio() {
     setGenerating(true);
     setGenError(null);
     try {
-      const blob = await synthesizeVoice({ modelId, text, speakerId, noiseScale, noiseScaleW, lengthScale, device });
+      const blob = await synthesizeVoice({
+        modelId,
+        text,
+        speakerId,
+        noiseScale,
+        noiseScaleW,
+        lengthScale,
+        device,
+      });
       setAudioUrl(URL.createObjectURL(blob));
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Sintesis gagal.");
@@ -140,7 +167,8 @@ export default function VoiceStudio() {
     <main className="w-full pb-12">
       <div className="mb-1 text-sm font-semibold">Voice Synthesis</div>
       <div className="mb-4 text-xs text-ink-muted">
-        Sintesis suara karakter berbasis VITS. Pilih game dan karakter, masukkan teks, lalu klik Generate.
+        Sintesis suara karakter berbasis VITS. Pilih game dan karakter, masukkan
+        teks, lalu klik Generate.
       </div>
 
       {loadError && (
@@ -257,7 +285,7 @@ export default function VoiceStudio() {
 
           <details>
             <summary className="cursor-pointer text-xs text-ink-muted">
-              Opsi lanjutan
+              Opsi Lanjutan
             </summary>
             <div className="mt-2.5 grid grid-cols-3 gap-3">
               {[
@@ -295,7 +323,7 @@ export default function VoiceStudio() {
             disabled={backendDown || generating || !text.trim()}
             onClick={handleGenerate}
           >
-            {generating ? "Membuat suara…" : "Generate"}
+            {generating ? "Membuat Suara…" : "Generate"}
           </button>
 
           {genError && (
@@ -312,6 +340,30 @@ export default function VoiceStudio() {
           )}
         </div>
       )}
+      <div
+        className="pointer-events-none absolute bottom-[225px] right-[25px] z-10 h-32 select-none overflow-visible"
+        aria-hidden
+      >
+        <img
+          src="/kafka-dance.gif"
+          alt=""
+          width={180}
+          height={56}
+          className="relative h-full w-full object-contain object-bottom opacity-95"
+        />
+      </div>
+      <div
+        className="pointer-events-none absolute bottom-1 left-[272px] z-10 h-52 select-none overflow-visible"
+        aria-hidden
+      >
+        <img
+          src="/kafka-bored.gif"
+          alt=""
+          width={180}
+          height={56}
+          className="relative h-full w-full object-contain object-bottom opacity-95"
+        />
+      </div>
     </main>
   );
 }
