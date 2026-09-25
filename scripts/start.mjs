@@ -195,16 +195,31 @@ function venvPythonPath() {
 // Menjalankan command sinkron dengan `stdio: inherit` (output langsung ke terminal parent).
 // Untuk setup yang butuh interaksi (`npm install`, `pip install`)
 // kita ingin user melihat progress bar asli.
-// `spawnSync` dengan `shell: IS_WIN` agar `.cmd` di Windows tetap ditemukan.
-// `shell: true` di Unix bisa menimbulkan quoting issue,
-// karena kita hanya pakai untuk `npm`/`pip` yang sederhana, ini aman.
+// Di Windows kita pakai `shell` agar `.cmd` (npm/pip shim) ditemukan,
+// tapi Node TIDAK meng-escape arg saat shell:true — ia menggabungkan
+// `cmd + args` apa adanya. Path dengan spasi (mis. "MUHAMMAD ILHAM") akan
+// terpotong oleh cmd.exe. Karena itu kita render sendiri command line-nya:
+// token yang mengandung spasi/quotes dibungkus tanda kutip, lalu kirim
+// sebagai satu string (tanpa arg terpisah → bebas DEP0190).
 function run(cmd, args = []) {
-  const r = spawnSync(cmd, args, {
-    cwd: ROOT,
-    encoding: "utf-8",
-    stdio: "inherit",
-    shell: IS_WIN,
-  });
+  let r;
+  if (IS_WIN) {
+    const quote = (s) =>
+      /[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
+    const cmdline = [cmd, ...args].map(quote).join(" ");
+    r = spawnSync(cmdline, [], {
+      cwd: ROOT,
+      encoding: "utf-8",
+      stdio: "inherit",
+      shell: true,
+    });
+  } else {
+    r = spawnSync(cmd, args, {
+      cwd: ROOT,
+      encoding: "utf-8",
+      stdio: "inherit",
+    });
+  }
   return r.status ?? 1;
 }
 
@@ -429,6 +444,7 @@ function spawnBackground(cmd, args, logFile) {
   // Pipe lewat parent memacu crash libuv (UV_HANDLE_CLOSING) saat process.exit() dan memperlambat server karena backpressure.
   // `openSync` lalu `stdio: ["ignore", fd, fd]`.
   const fd = openSync(logFile, "a");
+  const removerRoot = path.join(ROOT, "server", "storage", "remover");
   const child = spawn(cmd, args, {
     cwd: ROOT,
     // `detached` membuat anak bertahan setelah loader keluar. 
@@ -437,7 +453,14 @@ function spawnBackground(cmd, args, logFile) {
     detached: true,
     windowsHide: true,
     stdio: ["ignore", fd, fd],
-    env: { ...process.env, FORCE_COLOR: "1", NEXT_TELEMETRY_DISABLED: "1" },
+    env: {
+      ...process.env,
+      FORCE_COLOR: "1",
+      NEXT_TELEMETRY_DISABLED: "1",
+      REMBG_HOME: removerRoot,
+      U2NET_HOME: removerRoot,
+      XDG_DATA_HOME: path.join(ROOT, "server", "storage"),
+    },
   });
   child.unref();
   return child;

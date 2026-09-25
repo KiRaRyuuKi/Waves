@@ -85,7 +85,7 @@ export default function Dropdown({ label, options, value, onChange, placeholder 
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 right-0 z-50 mt-1 max-h-[260px] overflow-y-auto rounded-md border border-edge bg-white p-1 shadow-float"
+          className="absolute left-0 right-0 z-50 mt-1 max-h-[260px] overflow-y-auto overscroll-none rounded-md border border-edge bg-white p-1 shadow-float"
         >
           {options.length === 0 && (
             <div className="px-2.5 py-2 text-[13px] text-ink-muted">Tidak ada pilihan</div>
@@ -114,22 +114,6 @@ export default function Dropdown({ label, options, value, onChange, placeholder 
                 {o.icon}
                 <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{o.label}</span>
                 {o.right}
-                {isSel && (
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    className="flex-shrink-0 text-ink"
-                    aria-hidden
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
               </button>
             );
           })}

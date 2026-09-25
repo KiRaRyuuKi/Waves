@@ -650,7 +650,7 @@ export default function LLMHub() {
                 className="btn w-40 h-9 mt-4 shrink-0 text-xs"
                 disabled={loading}
               >
-                Terapkan filter
+                Terapkan Filter
               </button>
             </div>
           </div>
@@ -725,7 +725,7 @@ export default function LLMHub() {
                 >
                   <div className="flex items-start gap-3">
                     <div
-                      className={`flex h-9 w-9 flex-shrink-0 border items-center justify-center rounded-md text-sm font-bold ${isGguf ? "bg-ink text-white" : "bg-canvas-inset text-ink"}`}
+                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-sm font-bold ${isGguf ? "bg-ink text-white" : "bg-canvas-inset text-ink"}`}
                     >
                       {m.author
                         ? m.author.charAt(0).toUpperCase()
@@ -1194,7 +1194,7 @@ export default function LLMHub() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto overscroll-none p-4 space-y-4">
               {detailLoading && (
                 <div className="flex items-center gap-2 text-xs text-ink-muted">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-ink-muted border-t-transparent" />{" "}
@@ -1249,7 +1249,7 @@ export default function LLMHub() {
                           </div>
                         </div>
                         <div className="flex flex-col gap-2">
-                          <div className="flex flex-wrap gap-2 items-center">
+                          <div className="flex flex-wrap gap-2 pt-1.5 items-center">
                             {!convertStatus?.available ? (
                               <button
                                 onClick={() => void handleSetupLlama()}

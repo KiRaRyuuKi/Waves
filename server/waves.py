@@ -27,6 +27,7 @@ from .training import router as training_router
 from .video import router as video_router
 from .voice import router as voice_router
 from .llm import router as llm_router
+from .remover import router as remover_router
 
 app = FastAPI(title="Waves API")
 
@@ -87,6 +88,7 @@ app.include_router(coder_router)
 app.include_router(downloader_router)
 app.include_router(setup_router)
 app.include_router(llm_router)
+app.include_router(remover_router)
 app.include_router(devices.router)
 
 UPLOAD_ROOT = STORAGE_ROOT / "uploads"

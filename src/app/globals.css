@@ -63,6 +63,19 @@ body {
   height: 100%;
 }
 
+/* Matikan overscroll glow/bounce & scroll-chaining di seluruh app shell
+   (root scroller di Chrome tidak bisa dimatikan per-elemen; harus di sini). */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+/* Bulletproof: semua elemen menekan overscroll effect (glow/bounce),
+   sehingga scroller dalam (main, nav, dropdown, dll) tidak menggambar glow. */
+* {
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   background: var(--canvas-subtle);

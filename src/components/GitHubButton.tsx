@@ -137,7 +137,7 @@ export default function GitHubButton() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/30" aria-hidden />
           <div className="relative max-h-[85vh] w-full max-w-lg overflow-hidden rounded-xl border border-edge bg-white shadow-xl">
-            <div className="flex items-start justify-between gap-3 border-b border-edge p-5">
+            <div className="flex items-start justify-between gap-3 border-b border-edge px-4 py-3">
               <div>
                 <div className="flex items-center gap-2 text-[13px] font-semibold text-ink">
                   <svg
@@ -184,7 +184,7 @@ export default function GitHubButton() {
               </button>
             </div>
 
-            <div className="overflow-y-auto p-5" style={{ maxHeight: "55vh" }}>
+            <div className="overflow-y-auto overscroll-none p-5" style={{ maxHeight: "55vh" }}>
               {loading ? (
                 <div className="flex items-center gap-2 py-8 text-[13px] text-ink-muted">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-muted border-t-transparent" />{" "}
@@ -223,7 +223,7 @@ export default function GitHubButton() {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-edge bg-canvas-subtle p-5">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-edge bg-canvas-subtle px-4 py-3">
               <a
                 href={release?.html_url || REPO_URL}
                 target="_blank"

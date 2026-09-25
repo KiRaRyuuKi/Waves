@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Sidebar from "@/components/Sidebar";
 import DeviceSelect from "@/components/DeviceSelect";
 import GitHubButton from "@/components/GitHubButton";
+import NoOverScroll from "@/components/NoOverScroll";
 import { DeviceProvider } from "@/lib/deviceContext";
 
 import "./globals.css";
@@ -22,6 +23,7 @@ export default function RootLayout({
     <html lang="id" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <DeviceProvider>
+          <NoOverScroll />
           <div className="flex h-screen flex-col overflow-hidden">
             <header className="pt-4 px-4">
               <div className="flex flex-shrink-0 items-center justify-between gap-3 border border-edge rounded-md bg-white px-4 py-3.5">
@@ -72,8 +74,8 @@ export default function RootLayout({
                     </div>
                   </div>
                   <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-relaxed text-gray-500">
-                    Toolkit serba guna dengan backend FastAPI (Python) berbasis
-                    Next.js + TypeScript.
+                    Toolkit dengan beragam utilitas pintar untuk mempermudah
+                    kreasimu, fleksibel dan akan terus bertumbuh.
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -85,7 +87,7 @@ export default function RootLayout({
 
             <div className="flex min-h-0 flex-1 gap-4 py-4 pl-4">
               <Sidebar />
-              <main className="min-h-0 min-w-0 flex-1 pr-4 overflow-y-auto">
+              <main className="min-h-0 min-w-0 flex-1 pr-4 overflow-y-auto overscroll-none">
                 {children}
               </main>
             </div>

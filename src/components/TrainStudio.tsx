@@ -36,6 +36,12 @@ function fmtDuration(seconds?: number): string {
   return `${m} mnt ${s} dtk`;
 }
 
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function TrainStudio() {
   const { device } = useDevice();
   const [datasets, setDatasets] = useState<TrainingDataset[] | null>(null);
@@ -44,6 +50,7 @@ export default function TrainStudio() {
 
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingTexts, setPendingTexts] = useState<Record<string, string>>({});
+  const [pendingDrag, setPendingDrag] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const [editBuffer, setEditBuffer] = useState<
@@ -74,7 +81,13 @@ export default function TrainStudio() {
     } catch (err) {
       const down = isBackendDown(err);
       setBackendDown(down);
-      setLoadError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal memuat dataset.");
+      setLoadError(
+        down
+          ? BACKEND_DOWN_HINT
+          : err instanceof Error
+            ? err.message
+            : "Gagal memuat dataset.",
+      );
     }
   }, []);
 
@@ -130,6 +143,13 @@ export default function TrainStudio() {
     setPendingFiles((prev) => [...prev, ...Array.from(files)]);
   };
 
+  const onDropPending = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setPendingDrag(false);
+    const list = e.dataTransfer.files;
+    if (list && list.length) handleFiles(list);
+  }, []);
+
   const handleUpload = async () => {
     const missingText = pendingFiles.filter(
       (f) => !(pendingTexts[f.name] || "").trim(),
@@ -160,7 +180,13 @@ export default function TrainStudio() {
     } catch (err) {
       const down = isBackendDown(err);
       if (down) setBackendDown(true);
-      setActionError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Upload gagal.");
+      setActionError(
+        down
+          ? BACKEND_DOWN_HINT
+          : err instanceof Error
+            ? err.message
+            : "Upload gagal.",
+      );
     } finally {
       setUploading(false);
     }
@@ -179,7 +205,13 @@ export default function TrainStudio() {
     } catch (err) {
       const down = isBackendDown(err);
       if (down) setBackendDown(true);
-      setActionError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal menyimpan transkrip.");
+      setActionError(
+        down
+          ? BACKEND_DOWN_HINT
+          : err instanceof Error
+            ? err.message
+            : "Gagal menyimpan transkrip.",
+      );
     } finally {
       setSavingFile(null);
     }
@@ -195,7 +227,13 @@ export default function TrainStudio() {
     } catch (err) {
       const down = isBackendDown(err);
       if (down) setBackendDown(true);
-      setActionError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal menghapus dataset.");
+      setActionError(
+        down
+          ? BACKEND_DOWN_HINT
+          : err instanceof Error
+            ? err.message
+            : "Gagal menghapus dataset.",
+      );
     }
   };
 
@@ -225,7 +263,13 @@ export default function TrainStudio() {
     } catch (err) {
       const down = isBackendDown(err);
       if (down) setBackendDown(true);
-      setActionError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal memulai pelatihan.");
+      setActionError(
+        down
+          ? BACKEND_DOWN_HINT
+          : err instanceof Error
+            ? err.message
+            : "Gagal memulai pelatihan.",
+      );
     } finally {
       setStarting(false);
     }
@@ -257,7 +301,7 @@ export default function TrainStudio() {
           </span>
         ),
       })),
-    [datasets]
+    [datasets],
   );
 
   const baseModelOptions: DropdownOption[] = useMemo(
@@ -271,12 +315,12 @@ export default function TrainStudio() {
           </span>
         ),
       })),
-    [baseModels]
+    [baseModels],
   );
 
   return (
     <main className="w-full pb-12">
-      <div className="mb-1 text-sm font-semibold">Fine-tune VITS</div>
+      <div className="mb-1 text-sm font-semibold">Fine-tune VITS (ID)</div>
       <div className="mb-4 text-xs text-ink-muted">
         Latih kembali model supaya bisa bicara bahasa Indonesia. Data berupa
         pasangan file audio + transkrip.
@@ -289,33 +333,133 @@ export default function TrainStudio() {
       )}
 
       <div className="flex flex-col gap-5">
-        <div className="flex gap-5">
-          {/* 1. Upload dataset */}
-          <section className="card p-5 w-full">
+        <div className="grid gap-5 lg:grid-cols-2">
+          
+          {/* 1. Upload dataset — dropzone ala Remover */}
+          <section className="card flex flex-col p-5">
             <div className="card-header -m-5 mb-4">
-              1. Upload dataset suara (audio + transkrip)
+              1. Upload Dataset Suara (audio + transkrip)
             </div>
-            <div className="flex items-center gap-2.5">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setPendingDrag(true);
+              }}
+              onDragLeave={() => setPendingDrag(false)}
+              onDrop={onDropPending}
+              className="flex flex-col gap-3"
+            >
+              <label
+                htmlFor="training-audio-file"
+                className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-canvas-subtle px-4 py-7 text-center transition-colors hover:bg-canvas-inset ${pendingDrag ? "border-ink bg-canvas-inset" : "border-edge"}`}
+              >
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#9ca3af"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" />
+                  <path d="M19 10a7 7 0 0 1-14 0" />
+                  <path d="M12 18v3M8 21h8" />
+                </svg>
+                <span className="text-xs font-medium text-ink">
+                  {pendingFiles.length > 0
+                    ? "Tambah atau jatuhkan file audio"
+                    : "Pilih atau jatuhkan file audio"}
+                </span>
+                <span className="text-[11px] leading-relaxed text-ink-muted">
+                  WAV / MP3 / FLAC / OGG — beberapa file, 3–15 dtk per klip —
+                  drag &amp; drop didukung
+                </span>
+                {pendingFiles.length > 0 && (
+                  <span className="rounded-full border border-edge bg-white px-2.5 py-1 text-[11px] font-medium text-ink">
+                    {pendingFiles.length} file dipilih
+                  </span>
+                )}
+              </label>
               <input
+                id="training-audio-file"
                 type="file"
                 accept={AUDIO_ACCEPT}
                 multiple
-                onChange={(e) => handleFiles(e.target.files)}
-                className="text-[13px]"
+                className="hidden"
+                onChange={(e) => {
+                  handleFiles(e.target.files);
+                  e.target.value = "";
+                }}
               />
-            </div>
-            <div className="mt-1.5 text-[11px] text-ink-muted">
-              Pilih beberapa file audio (~ setiap klip 3–15 detik, satu kalimat)
-              — transkripsi ditulis sendiri di bawah.
+              {pendingFiles.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {pendingFiles.map((f) => (
+                    <span
+                      key={f.name}
+                      className="inline-flex w-full items-center justify-between rounded-md border border-edge bg-white px-2.5 py-2 text-[11px] text-ink"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          strokeWidth="1.5"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
+                          />
+                        </svg>
+
+                        <span className="truncate">{f.name}</span>
+                        <span className="shrink-0 text-ink-muted">
+                          · {formatBytes(f.size)}
+                        </span>
+                      </div>
+
+                      <button
+                        className="rounded bg-red-600 w-20 px-2 py-0.5 font-medium text-white hover:bg-red-700 shrink-0"
+                        onClick={() => {
+                          setPendingFiles((prev) =>
+                            prev.filter((x) => x.name !== f.name),
+                          );
+                          setPendingTexts((prev) => {
+                            const next = { ...prev };
+                            delete next[f.name];
+                            return next;
+                          });
+                        }}
+                      >
+                        Hapus
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {pendingFiles.length > 0 && (
-              <div className="mt-3.5 flex flex-col gap-2.5">
+            {pendingFiles.length > 0 ? (
+              <div className="mt-4 flex flex-col gap-2.5">
                 {pendingFiles.map((f) => (
-                  <div key={f.name} className="flex items-start gap-2.5">
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold text-ink-muted">
-                        {f.name}
+                  <div
+                    key={f.name}
+                    className="flex items-start gap-2.5 rounded-md border border-edge bg-canvas-subtle p-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-xs font-medium text-ink">
+                          {f.name}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-ink-muted">
+                          {formatBytes(f.size)}
+                        </span>
                       </div>
                       <textarea
                         rows={2}
@@ -328,118 +472,167 @@ export default function TrainStudio() {
                           }))
                         }
                         className={areaCls}
-                        style={{ fontFamily: "inherit", marginTop: 4 }}
+                        style={{ fontFamily: "inherit", marginTop: 6 }}
                       />
                     </div>
-                    <button
-                      className="btn"
-                      onClick={() => {
-                        setPendingFiles((prev) =>
-                          prev.filter((x) => x.name !== f.name),
-                        );
-                        setPendingTexts((prev) => {
-                          const next = { ...prev };
-                          delete next[f.name];
-                          return next;
-                        });
-                      }}
-                    >
-                      Hapus
-                    </button>
                   </div>
                 ))}
-                <div>
-                  <button
-                    className="btn btn-primary"
-                    disabled={uploading || controlsDisabled}
-                    onClick={handleUpload}
-                  >
-                    {uploading ? "Mengunggah…" : "Simpan dataset"}
-                  </button>
-                </div>
+                <button
+                  className="btn btn-primary w-full"
+                  disabled={uploading || controlsDisabled}
+                  onClick={handleUpload}
+                >
+                  {uploading ? "Mengunggah…" : "Simpan dataset"}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-md border border-edge bg-canvas-subtle p-3 text-[11px] leading-relaxed text-ink-muted">
+                Pilih beberapa file audio (~ setiap klip 3–15 detik, satu
+                kalimat). Setiap file butuh transkrip bahasa Indonesia yang
+                sesuai sebelum disimpan.
               </div>
             )}
           </section>
-          {/* 2. Dataset tersimpan */}
-          <section className="card p-5 w-full">
-            <div className="card-header -m-5 mb-4">2. Dataset tersimpan</div>
+
+          {/* 2. Dataset tersimpan — rapi ala Remover card */}
+          <section className="card flex flex-col p-5">
+            <div className="card-header -m-5 mb-4">2. Dataset Tersimpan</div>
             {datasets === null && (
-              <div className="text-[13px] text-ink-muted">Memuat…</div>
+              <div className="flex items-center justify-center gap-2 py-8 text-[12px] text-ink-muted">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink border-t-transparent" />
+                Memuat dataset…
+              </div>
             )}
             {datasets && datasets.length === 0 && (
-              <div className="text-[13px] text-ink-muted">
-                Belum ada dataset. Upload dulu di bagian 1.
+              <div className="flex flex-col h-full items-center justify-center gap-2 rounded-md border border-dashed border-edge bg-canvas-subtle px-4 py-8 text-center">
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#9ca3af"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+                  <path d="M12 11v6M9 14h6" />
+                </svg>
+                <span className="text-xs font-medium text-ink">
+                  Belum ada dataset
+                </span>
+                <span className="max-w-[260px] text-[11px] leading-relaxed text-ink-muted">
+                  Upload beberapa klip audio + transkrip di langkah 1. Dataset
+                  akan muncul di sini dan siap untuk fine-tune.
+                </span>
               </div>
             )}
-            {datasets?.map((ds) => (
-              <div
-                key={ds.id}
-                className="mb-3 rounded-md border border-edge p-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="mono text-xs text-ink-muted">
-                    {ds.id} · {ds.files.length} file
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      className="btn"
-                      disabled={running || controlsDisabled}
-                      onClick={() => {
-                        setTrainDatasetId(ds.id);
-                        setActionError(null);
-                      }}
+            {datasets && datasets.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {datasets.map((ds) => {
+                  const isActive = trainDatasetId === ds.id;
+                  return (
+                    <div
+                      key={ds.id}
+                      className={`overflow-hidden rounded-md border ${isActive ? "border-ink" : "border-edge"} bg-white`}
                     >
-                      Latih dataset ini
-                    </button>
-                    <button
-                      className="btn text-red-600"
-                      onClick={() => handleDelete(ds.id)}
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-2 flex flex-col gap-2">
-                  {ds.files.map((item) => (
-                    <div key={item.file} className="flex items-start gap-2.5">
-                      <textarea
-                        rows={1}
-                        value={editBuffer[ds.id]?.[item.file] ?? item.text}
-                        onChange={(e) =>
-                          setEditBuffer((prev) => ({
-                            ...prev,
-                            [ds.id]: {
-                              ...prev[ds.id],
-                              [item.file]: e.target.value,
-                            },
-                          }))
-                        }
-                        disabled={running || controlsDisabled}
-                        className={areaCls}
-                        style={{ fontFamily: "inherit", flex: 1 }}
-                      />
-                      <button
-                        className="btn"
-                        disabled={
-                          savingFile === `${ds.id}:${item.file}` || running
-                        }
-                        onClick={() => handleSaveEdit(ds.id, item.file)}
+                      <div
+                        className={`flex items-center justify-between gap-2 border-b px-3 py-2.5 ${isActive ? "border-ink bg-ink text-white" : "border-edge bg-canvas-subtle"}`}
                       >
-                        {savingFile === `${ds.id}:${item.file}`
-                          ? "Simpan…"
-                          : "Simpan"}
-                      </button>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] border text-[11px] font-bold ${isActive ? "border-white/20 bg-white/15 text-white" : "border-edge bg-white text-ink"}`}
+                          >
+                            DS
+                          </span>
+                          <span
+                            className={`mono truncate text-xs font-medium ${isActive ? "text-white" : "text-ink"}`}
+                            title={ds.id}
+                          >
+                            {ds.id}
+                          </span>
+                          <span
+                            className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${isActive ? "border-white/20 bg-white/15 text-white" : "border-edge bg-white text-ink-muted"}`}
+                          >
+                            {ds.files.length} file
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 gap-1.5">
+                          <button
+                            className={`btn text-xs ${isActive ? "border-white/20 bg-white text-ink hover:bg-white/90" : ""}`}
+                            disabled={running || controlsDisabled}
+                            onClick={() => {
+                              setTrainDatasetId(ds.id);
+                              setActionError(null);
+                            }}
+                          >
+                            {isActive ? "Dipilih ✓" : "Latih dataset ini"}
+                          </button>
+                          <button
+                            className={`btn text-xs ${isActive ? "border-white/20 text-white hover:bg-white/10" : "text-red-600"}`}
+                            onClick={() => handleDelete(ds.id)}
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2 bg-canvas-subtle p-3">
+                        {ds.files.map((item) => (
+                          <div
+                            key={item.file}
+                            className="flex items-start gap-2.5 rounded-md border border-edge bg-white p-2.5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 truncate text-[11px] font-medium text-ink">
+                                {item.file}
+                              </div>
+                              <textarea
+                                rows={1}
+                                value={
+                                  editBuffer[ds.id]?.[item.file] ?? item.text
+                                }
+                                onChange={(e) =>
+                                  setEditBuffer((prev) => ({
+                                    ...prev,
+                                    [ds.id]: {
+                                      ...prev[ds.id],
+                                      [item.file]: e.target.value,
+                                    },
+                                  }))
+                                }
+                                disabled={running || controlsDisabled}
+                                placeholder="Transkrip…"
+                                className={areaCls}
+                                style={{ fontFamily: "inherit" }}
+                              />
+                            </div>
+                            <button
+                              className="btn shrink-0"
+                              disabled={
+                                savingFile === `${ds.id}:${item.file}` ||
+                                running
+                              }
+                              onClick={() => handleSaveEdit(ds.id, item.file)}
+                            >
+                              {savingFile === `${ds.id}:${item.file}`
+                                ? "Simpan…"
+                                : "Simpan"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            ))}
+            )}
           </section>
         </div>
 
         {/* 3. Mulai pelatihan */}
         <section className="card p-5 w-full">
-          <div className="card-header -m-5 mb-4">3. Mulai pelatihan</div>
+          <div className="card-header -m-5 mb-4">3. Mulai Pelatihan</div>
           <div className="flex flex-col gap-3">
             <div>
               <Dropdown
@@ -527,7 +720,7 @@ export default function TrainStudio() {
             </div>
             <div>
               <button
-                className="btn btn-primary"
+                className="btn btn-primary w-40"
                 disabled={
                   starting || running || !trainDatasetId || !baseModelId
                 }
@@ -536,8 +729,8 @@ export default function TrainStudio() {
                 {starting
                   ? "Memulai…"
                   : running
-                    ? "Sedang berjalan…"
-                    : "Mulai latih"}
+                    ? "Sedang Berjalan…"
+                    : "Mulai Latih"}
               </button>
               {running && (
                 <button className="btn ml-2 text-red-600" onClick={handleStop}>

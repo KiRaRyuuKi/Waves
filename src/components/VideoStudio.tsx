@@ -40,6 +40,12 @@ const FPS: Record<string, number[]> = {
   wan: [16],
 };
 
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function VideoStudio() {
   const [models, setModels] = useState<VideoModelInfo[] | null>(null);
   const [history, setHistory] = useState<string[]>([]);
@@ -92,8 +98,9 @@ export default function VideoStudio() {
 
   // txt2vid / img2vid — sama seperti Image Generation
   const [mode, setMode] = useState<"txt2vid" | "img2vid">("txt2vid");
-  const [initFile, setInitFile] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [initFile, setInitFile] = useState<{ name: string; size: number; dataUrl: string } | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
+  const [initDrag, setInitDrag] = useState(false);
   const [strength, setStrength] = useState(0.6);
 
   const [generating, setGenerating] = useState(false);
@@ -182,18 +189,55 @@ export default function VideoStudio() {
       (models ?? []).map((m) => ({
         id: m.id,
         label: m.name,
-        icon: (
-          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[5px] bg-canvas-subtle text-[11px]">
-            {m.kind === "wan" ? "W" : "A"}
+        icon:
+          m.id === "wan" ? (
+            <span className="flex h-7 w-7 items-center justify-center rounded-[5px] bg-canvas-subtle text-[11px] font-bold">
+              W
+            </span>
+          ) : (
+            <span className="flex h-7 w-7 items-center justify-center rounded-[5px] bg-canvas-subtle text-[11px] font-bold">
+              AD
+            </span>
+          ),
+        right: m.installed ? (
+          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-emerald-600">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+              />
+            </svg>
+          </span>
+        ) : (
+          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-amber-600">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+              />
+            </svg>
           </span>
         ),
-        right: m.installed ? (
-          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-emerald-600">Terpasang</span>
-        ) : (
-          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-amber-600">Belum terpasang</span>
-        ),
       })),
-    [models]
+    [models],
   );
 
   const baseOptions: DropdownOption[] = useMemo(() => {
@@ -253,9 +297,15 @@ export default function VideoStudio() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setInitFile({ name: file.name, dataUrl: String(reader.result) });
+    reader.onload = () => setInitFile({ name: file.name, size: file.size, dataUrl: String(reader.result) });
     reader.onerror = () => setInitError("Gagal membaca file.");
     reader.readAsDataURL(file);
+  };
+
+  const onDropInit = (e: React.DragEvent) => {
+    e.preventDefault();
+    setInitDrag(false);
+    handlePickInit(e.dataTransfer.files?.[0]);
   };
 
   const handleGenerate = async () => {
@@ -317,11 +367,6 @@ export default function VideoStudio() {
 
   return (
     <main className="w-full pb-12">
-      <div className="mb-1 text-sm font-semibold">Video Generation</div>
-      <div className="mb-4 text-xs text-ink-muted">
-        Buat video pendek dari teks dan gambar. Pilih model, masukkan prompt,
-        dan klik Generate.
-      </div>
 
       {loadError && (
         <div className="rounded-md border border-edge bg-red-50 mb-4 px-4 py-3 text-[12px] text-red-600">
@@ -345,7 +390,7 @@ export default function VideoStudio() {
           {/* Panel konfigurasi */}
           <div className="card flex flex-col gap-4 p-5">
             <Dropdown
-              label="Model video"
+              label="Model Video"
               value={modelId}
               options={modelOptions}
               onChange={setModelId}
@@ -355,7 +400,7 @@ export default function VideoStudio() {
 
             {kind === "animatediff" && (
               <Dropdown
-                label="Model dasar (SD 1.5)"
+                label="Model Dasar (SD 1.5)"
                 value={baseId}
                 options={baseOptions}
                 onChange={setBaseId}
@@ -436,7 +481,7 @@ export default function VideoStudio() {
 
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-muted">
-                Negative prompt{" "}
+                Negative Prompt{" "}
                 <span className="font-normal text-ink-subtle">(opsional)</span>
               </label>
               <textarea
@@ -453,12 +498,37 @@ export default function VideoStudio() {
 
             {mode === "img2vid" && (
               <div className="flex flex-col gap-3 rounded-md border border-edge p-3">
-                <label
-                  htmlFor="vid-img2vid-file"
-                  className="inline-block cursor-pointer self-start rounded-md border border-edge bg-canvas-subtle px-2.5 py-1.5 text-xs text-ink hover:bg-canvas-inset"
-                >
-                  {initFile ? "Ganti gambar awal…" : "Pilih gambar awal…"}
-                </label>
+                {!initFile && (
+                  <label
+                    htmlFor="vid-img2vid-file"
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setInitDrag(true);
+                    }}
+                    onDragLeave={() => setInitDrag(false)}
+                    onDrop={onDropInit}
+                    className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-canvas-subtle px-4 py-6 text-center transition-colors hover:bg-canvas-inset ${initDrag ? "border-ink bg-canvas-inset" : "border-edge"}`}
+                  >
+                    <svg
+                      width="28"
+                      height="28"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#9ca3af"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    <span className="text-xs font-medium text-ink">
+                      Pilih atau jatuhkan gambar awal
+                    </span>
+                    <span className="text-[11px] text-ink-muted">
+                      PNG / JPG / WebP — drag &amp; drop didukung
+                    </span>
+                  </label>
+                )}
                 <input
                   id="vid-img2vid-file"
                   type="file"
@@ -477,6 +547,9 @@ export default function VideoStudio() {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-xs font-medium">
                         {initFile.name}
+                      </div>
+                      <div className="text-[11px] text-ink-muted">
+                        {formatBytes(initFile.size)}
                       </div>
                       <button
                         type="button"
@@ -515,7 +588,7 @@ export default function VideoStudio() {
 
             <details>
               <summary className="cursor-pointer text-xs text-ink-muted">
-                Opsi lanjutan
+                Opsi Lanjutan
               </summary>
               <div className="mt-2.5 grid grid-cols-2 gap-3">
                 <div className="col-span-2">

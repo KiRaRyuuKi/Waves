@@ -37,6 +37,16 @@ accelerate>=0.30
 pillow>=12.0
 soundfile>=0.14
 
+# --- Background remover (rembg) ---
+# Hanya dipakai via server/remover.py dengan model lokal di
+# server/storage/remover/<model>/<model>.onnx — tidak pernah ke ~/.rembg
+# Install di .venv saja, jangan di python system.
+rembg>=2.0
+onnxruntime>=1.18
+pymatting>=1.0
+scikit-image>=0.22
+pooch>=1.8
+
 # --- Video generation (AnimateDiff + Wan 2.1) ---
 # server/video.py. AnimateDiff menempel ke model SD di storage/generate/image/;
 # Wan 2.1 butuh diffusers >= 0.33 (WanPipeline), UMT5 tokenizer (sentencepiece).

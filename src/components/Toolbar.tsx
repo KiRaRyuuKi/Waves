@@ -9,15 +9,15 @@ export default function Toolbar({ fileName, showReset, onReset }: Props) {
     <div className="mb-1 flex items-center justify-between">
       <div className="w-full">
         <span className="mb-1 text-sm font-semibold">
-          {fileName ?? "Music Stem Studio"}
+          {fileName ?? "Stem Separator"}
         </span>
         {fileName && (
           <span className="label bg-canvas-inset text-ink-muted ml-1">
             Demucs
           </span>
         )}
-        <div className="text-xs text-ink-muted">
-          Pemisah instrumen musik menjadi beberapa stem menggunakan Demucs.
+        <div className="mt-0.5 text-xs text-ink-muted">
+          Pemisah instrumen musik menjadi beberapa stem berbasis Demucs.
         </div>
       </div>
 

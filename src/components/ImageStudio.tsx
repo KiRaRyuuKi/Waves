@@ -1,10 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchModels, generateImage, sdCoverUrl, type ModelInfo } from "../lib/imageApi";
+import {
+  fetchModels,
+  generateImage,
+  sdCoverUrl,
+  type ModelInfo,
+} from "../lib/imageApi";
 import Dropdown, { type DropdownOption } from "./Dropdown";
 import { useDevice } from "../lib/deviceContext";
 import { BACKEND_DOWN_HINT, isBackendDown } from "../lib/api";
+
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function ImageStudio() {
   const [models, setModels] = useState<ModelInfo[] | null>(null);
@@ -20,8 +31,13 @@ export default function ImageStudio() {
   const [seedText, setSeedText] = useState("");
   const [nImages, setNImages] = useState(1);
   const [mode, setMode] = useState<"txt2img" | "img2img">("txt2img");
-  const [initFile, setInitFile] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [initFile, setInitFile] = useState<{
+    name: string;
+    size: number;
+    dataUrl: string;
+  } | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
+  const [initDrag, setInitDrag] = useState(false);
   const [strength, setStrength] = useState(0.5);
   const { device } = useDevice();
   const [generating, setGenerating] = useState(false);
@@ -73,14 +89,24 @@ export default function ImageStudio() {
           const firstInstalled = list.find((m) => m.installed) || list[0];
           if (firstInstalled) {
             setModelId(firstInstalled.id);
-            setPrompt(firstInstalled.description ? `Contoh untuk ${firstInstalled.name}` : "");
+            setPrompt(
+              firstInstalled.description
+                ? `Contoh untuk ${firstInstalled.name}`
+                : "",
+            );
           }
         }
       })
       .catch((err) => {
         const down = isBackendDown(err);
         setBackendDown(down);
-        setLoadError(down ? BACKEND_DOWN_HINT : err instanceof Error ? err.message : "Gagal memuat daftar model.");
+        setLoadError(
+          down
+            ? BACKEND_DOWN_HINT
+            : err instanceof Error
+              ? err.message
+              : "Gagal memuat daftar model.",
+        );
       });
   };
 
@@ -109,7 +135,12 @@ export default function ImageStudio() {
   const notInstalled = selectedModel ? !selectedModel.installed : false;
   // Dropdown tetap aktif biar bisa dipilih dan lihat keterangan — hanya backendDown yang disable dropdown
   const controlsDisabled = backendDown;
-  const generateDisabled = backendDown || notInstalled || !modelId || !prompt.trim() || (mode === "img2img" && !initFile);
+  const generateDisabled =
+    backendDown ||
+    notInstalled ||
+    !modelId ||
+    !prompt.trim() ||
+    (mode === "img2img" && !initFile);
 
   // Deskripsi fallback langsung dari known_defs backend — agar selalu tampil meski sudah terpasang
   const KNOWN_DESCS: Record<string, string> = {
@@ -117,39 +148,71 @@ export default function ImageStudio() {
     "stable-diffusion": "Model SD 1.5 standar industri (~5,1 GB).",
     "dream-shaper": "Fine-tune SD 1.5 untuk ilustrasi artistik (~5,1 GB).",
   };
-  const displayDesc =
-    selectedModel?.description?.trim()
-      ? selectedModel.description
-      : selectedModel
-        ? KNOWN_DESCS[selectedModel.id] ?? "Menghasilkan gambar dari teks dengan model yang sudah terpasang. Pilih model, masukkan prompt, dan klik Generate."
-        : "Menghasilkan gambar dari teks dengan model yang sudah terpasang. Pilih model, masukkan prompt, dan klik Generate.";
+  const displayDesc = selectedModel?.description?.trim()
+    ? selectedModel.description
+    : selectedModel
+      ? (KNOWN_DESCS[selectedModel.id] ??
+        "Menghasilkan gambar dari teks dengan model yang sudah terpasang. Pilih model, masukkan prompt, dan klik Generate.")
+      : "Menghasilkan gambar dari teks dengan model yang sudah terpasang. Pilih model, masukkan prompt, dan klik Generate.";
 
   const modelOptions: DropdownOption[] = useMemo(
     () =>
       (models ?? []).map((m) => ({
         id: m.id,
         label: m.name,
-        icon: m.has_cover ? (
-          <img
-            src={sdCoverUrl(m.id)}
-            alt=""
-            width={28}
-            height={28}
-            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
-            className="flex-shrink-0 rounded-[5px] object-cover"
-          />
+        icon:
+          m.id === "dream-shaper" ? (
+            <span className="flex h-7 w-7 items-center justify-center rounded-[5px] bg-canvas-subtle text-[11px] font-bold">
+              DS
+            </span>
+          ) : m.id.includes("stable-diffusion") ? (
+            <span className="flex h-7 w-7 items-center justify-center rounded-[5px] bg-canvas-subtle text-[11px] font-bold">
+              SD
+            </span>
+          ) : (
+            <span className="flex h-7 w-7 items-center justify-center rounded-[5px] bg-canvas-subtle text-[11px] font-bold">
+              Ty
+            </span>
+          ),
+        right: m.installed ? (
+          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-emerald-600">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+              />
+            </svg>
+          </span>
         ) : (
-          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[5px] bg-canvas-subtle text-[11px] font-medium">
-            {m.name.trim().charAt(0).toUpperCase() || "•"}
+          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-amber-600">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+              />
+            </svg>
           </span>
         ),
-        right: m.installed ? (
-          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-emerald-600">Terpasang</span>
-        ) : (
-          <span className="max-w-32 flex-shrink-0 truncate text-[11px] text-amber-600">Belum terpasang</span>
-        ),
       })),
-    [models]
+    [models],
   );
 
   const parseSeed = (): number | null => {
@@ -167,9 +230,16 @@ export default function ImageStudio() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setInitFile({ name: file.name, dataUrl: String(reader.result) });
+    reader.onload = () =>
+      setInitFile({ name: file.name, size: file.size, dataUrl: String(reader.result) });
     reader.onerror = () => setInitError("Gagal membaca file.");
     reader.readAsDataURL(file);
+  };
+
+  const onDropInit = (e: React.DragEvent) => {
+    e.preventDefault();
+    setInitDrag(false);
+    handlePickInit(e.dataTransfer.files?.[0]);
   };
 
   const handleGenerate = async () => {
@@ -200,7 +270,7 @@ export default function ImageStudio() {
         (stage, progress) => {
           setJobStage(stage);
           if (progress >= 0) setJobProgress(progress);
-        }
+        },
       );
       setImages(result.images);
       setResultSeed(result.seed);
@@ -213,12 +283,6 @@ export default function ImageStudio() {
 
   return (
     <main className="w-full pb-12">
-      <div className="mb-1 text-sm font-semibold">Image Generation</div>
-      <div className="mb-4 text-xs text-ink-muted">
-        Generate gambar dengan Stable Diffusion. Pilih model, masukkan prompt,
-        dan klik Generate.
-      </div>
-
       {loadError && (
         <div className="rounded-md border border-edge bg-red-50 mb-4 px-4 py-3 text-[12px] text-red-600">
           {loadError}
@@ -329,7 +393,7 @@ export default function ImageStudio() {
 
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-muted">
-                Negative prompt{" "}
+                Negative Prompt{" "}
                 <span className="font-normal text-ink-subtle">(opsional)</span>
               </label>
               <textarea
@@ -346,12 +410,37 @@ export default function ImageStudio() {
 
             {mode === "img2img" && (
               <div className="flex flex-col gap-3 rounded-md border border-edge p-3">
-                <label
-                  htmlFor="img2img-file"
-                  className="inline-block cursor-pointer self-start rounded-md border border-edge bg-canvas-subtle px-2.5 py-1.5 text-xs text-ink hover:bg-canvas-inset"
-                >
-                  {initFile ? "Ganti gambar awal…" : "Pilih gambar awal…"}
-                </label>
+                {!initFile && (
+                  <label
+                    htmlFor="img2img-file"
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setInitDrag(true);
+                    }}
+                    onDragLeave={() => setInitDrag(false)}
+                    onDrop={onDropInit}
+                    className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-canvas-subtle px-4 py-6 text-center transition-colors hover:bg-canvas-inset ${initDrag ? "border-ink bg-canvas-inset" : "border-edge"}`}
+                  >
+                    <svg
+                      width="28"
+                      height="28"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#9ca3af"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    <span className="text-xs font-medium text-ink">
+                      Pilih atau jatuhkan gambar awal
+                    </span>
+                    <span className="text-[11px] text-ink-muted">
+                      PNG / JPG / WebP — drag &amp; drop didukung
+                    </span>
+                  </label>
+                )}
                 <input
                   id="img2img-file"
                   type="file"
@@ -370,6 +459,9 @@ export default function ImageStudio() {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-xs font-medium">
                         {initFile.name}
+                      </div>
+                      <div className="text-[11px] text-ink-muted">
+                        {formatBytes(initFile.size)}
                       </div>
                       <button
                         type="button"
@@ -408,7 +500,7 @@ export default function ImageStudio() {
 
             <details>
               <summary className="cursor-pointer text-xs text-ink-muted">
-                Opsi lanjutan
+                Opsi Lanjutan
               </summary>
               <div className="mt-2.5 grid grid-cols-2 gap-3">
                 <div>
@@ -593,7 +685,16 @@ export default function ImageStudio() {
                           title="Unduh gambar ini"
                         >
                           Unduh{" "}
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                             <polyline points="7 10 12 15 17 10" />
                             <line x1="12" y1="15" x2="12" y2="3" />

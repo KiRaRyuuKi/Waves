@@ -420,7 +420,7 @@ export default function StemDemucs() {
 
           {masterPeaks && (
             <div className="card mt-4">
-              <div className="card-header">Track asli</div>
+              <div className="card-header">Track Asli</div>
               <div className="px-4 py-3">
                 <Waveform
                   peaks={masterPeaks}

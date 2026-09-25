@@ -58,7 +58,7 @@ export default function RecentUploads({ jobs, onOpen, onDelete }: Props) {
 
   return (
     <div className="card mt-4">
-      <div className="card-header">Unggahan terbaru</div>
+      <div className="card-header">Unggahan Terbaru</div>
       <div className="p-2">
         {jobs.map((job) => {
           const modelLabel =

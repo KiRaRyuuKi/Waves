@@ -83,34 +83,39 @@ export default function ServerControl() {
         aria-expanded={open}
         title={
           state.running
-            ? "Server berjalan — klik untuk menu"
+            ? "Server berjalan, Klik untuk menu"
             : "Server belum berjalan"
         }
-        className={`relative flex h-[38px] w-[38px] pl-1 items-center justify-center rounded-md border transition-colors ${
+        className={`relative flex h-[38px] w-[38px] pl-0.5 items-center justify-center rounded-md border transition-colors ${
           state.running
             ? "border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"
             : "border-edge bg-white text-ink-subtle hover:bg-canvas-subtle"
         }`}
       >
         <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
           fill="none"
+          width="18 "
+          height="18"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
           stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
         >
-          <path d="M12 2v9" />
-          <path d="M18.36 6.64a9 9 0 1 1-12.72 0" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"
+          />
         </svg>
         <span className="absolute right-1 top-1 flex h-1.5 w-1.5">
-          <span
-            className={`absolute -right-0 -top-0 h-1.5 w-1.5 rounded-full ${state.running ? "bg-red-500" : "bg-gray-500"}`}
-          />
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+          {state.running ? (
+            <>
+              <span className="absolute -right-0 -top-0 h-1.5 w-1.5 rounded-full bg-red-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+            </>
+          ) : (
+            <span className="absolute -right-0 -top-0 h-1.5 w-1.5 rounded-full bg-gray-300" />
+          )}
         </span>
       </button>
 
@@ -140,18 +145,19 @@ export default function ServerControl() {
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] text-ink transition-colors hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
               width="15"
               height="15"
               viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
               strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
+              stroke="currentColor"
             >
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+              />
             </svg>
             <span className="flex-1">
               {state.running ? "Restart Server" : "Start Server"}
@@ -172,17 +178,19 @@ export default function ServerControl() {
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
               width="15"
               height="15"
               viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
               strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
+              stroke="currentColor"
             >
-              <path d="M18 6 6 18M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 18 18 6M6 6l12 12"
+              />
             </svg>
             <span className="flex-1">Close Server</span>
             {busy === "stop" && (

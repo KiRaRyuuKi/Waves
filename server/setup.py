@@ -37,6 +37,12 @@ AD_MOTION_DIR = ANIMATEDIFF_DIR / "motion-adapter"
 AD_CLIP_DIR = ANIMATEDIFF_DIR / "clip-vit-large"
 WAN_DIR = VIDEO_DIR / "wan"
 
+# Remover ONNX (Background Remover) — server/storage/remover/<model>/<model>.onnx
+REMOVER_DIR = PROJECT_ROOT / "server" / "storage" / "remover"
+U2NET_DIR = REMOVER_DIR / "u2net"
+ISNET_DIR = REMOVER_DIR / "isnet"
+SILUETA_DIR = REMOVER_DIR / "silueta"
+
 # Cache bobot Demucs (dibaca oleh torch.hub → separator.py). Disamakan
 # Aligned with the default torch hub directory on this platform.
 STEM_DIR = Path.home() / ".cache" / "torch" / "hub" / "checkpoints"
@@ -93,6 +99,11 @@ STEM_MDX_EXTRA = {
     "5d2d6c55-db83574e.th": 167391595,
     "cfa93e08-61801ae1.th": 167399275,
 }
+
+# Remover ONNX totals (dari server/storage/remover saat ini)
+REMOVER_U2NET_TOTAL = 175997641
+REMOVER_ISNET_TOTAL = 178648008
+REMOVER_SILUETA_TOTAL = 44173029
 
 # Ukuran total per model Demucs (untuk progres & "installed").
 STEM_HTDEMUCS_TOTAL = sum(STEM_HTDEMUCS.values())
@@ -204,7 +215,7 @@ def _task_state(task_id: str) -> dict:
 TASKS = [
     {
         "id": "tiny_sd",
-        "name": "Model Tiny-SD",
+        "name": "Tiny-SD",
         "description": "Model Stable Diffusion ringan dari HuggingFace "
         "(~1 GB) yang dipakai Image Generation.",
         "info": "Model AI teks-ke-gambar. Ringan & cepat, cocok untuk "
@@ -219,7 +230,7 @@ TASKS = [
     },
     {
         "id": "sd15",
-        "name": "Model Stable Diffusion 1.5",
+        "name": "Stable Diffusion 1.5",
         "description": "Model SD 1.5 standar industri dari HuggingFace (~5,1 GB).",
         "info": "Model paling populer di komunitas. Hasil bagus dan "
         "kompatibel dengan LoRA & ControlNet.",
@@ -237,7 +248,7 @@ TASKS = [
     },
     {
         "id": "dreamshaper",
-        "name": "Model DreamShaper 8",
+        "name": "DreamShaper 8",
         "description": "Fine-tune SD 1.5 untuk ilustrasi artistik (~5,1 GB).",
         "info": "Versi lebih detail dari SD 1.5. Unggul untuk ilustrasi, "
         "konsep art, dan fantasy.",
@@ -287,7 +298,7 @@ TASKS = [
     },
     {
         "id": "stem_htdemucs",
-        "name": "Stem Model — Standard (htdemucs)",
+        "name": "Standard (htdemucs)",
         "description": "Bobot Demucs standar untuk pemisahan stem "
         "(~80 MB) — cepat & pas untuk lagu umum.",
         "info": "Model bawaan Demucs. Memisahkan lagu jadi vocals, "
@@ -302,7 +313,7 @@ TASKS = [
     },
     {
         "id": "stem_htdemucs_ft",
-        "name": "Stem Model — High Quality (htdemucs_ft)",
+        "name": "High Quality (htdemucs_ft)",
         "description": "Bobot Demucs fine-tuned untuk kualitas pemisahan "
         "lebih bersih (~320 MB, 4 sub-model).",
         "info": "Runs 4 sub-model sehingga hasil pemisahan lebih detail "
@@ -317,7 +328,7 @@ TASKS = [
     },
     {
         "id": "stem_mdx_extra",
-        "name": "Stem Model — Alternative (mdx_extra)",
+        "name": "Alternative (mdx_extra)",
         "description": "Bobot MDX v2 untuk pemisahan stem model "
         "alternatif (~640 MB, 4 sub-model).",
         "info": "Arsitektur MDX-A. Cocok sebagai alternatif saat "
@@ -328,6 +339,45 @@ TASKS = [
         "total_bytes": STEM_MDX_EXTRA_TOTAL,
         "check_dir": STEM_DIR,
         "check_files": STEM_MDX_EXTRA,
+        "needs_python": False,
+    },
+    {
+        "id": "remover_u2net",
+        "name": "U²-Net",
+        "description": "Model U²-Net general-purpose untuk hapus background (~168 MB).",
+        "info": "Paling stabil untuk foto produk & objek umum. Seimbang cepat & akurat.",
+        "script": "dl_remover.ps1",
+        "script_args": ["-Model", "u2net"],
+        "category": "remover",
+        "total_bytes": REMOVER_U2NET_TOTAL,
+        "check_dir": U2NET_DIR,
+        "check_files": {"u2net.onnx": REMOVER_U2NET_TOTAL},
+        "needs_python": False,
+    },
+    {
+        "id": "remover_isnet",
+        "name": "ISNet General Use",
+        "description": "Model ISNet detail tinggi untuk rambut/bulu/tepi halus (~170 MB).",
+        "info": "Presisi tepi terbaik untuk rambut, bulu, dedaunan. Hasil paling detail.",
+        "script": "dl_remover.ps1",
+        "script_args": ["-Model", "isnet"],
+        "category": "remover",
+        "total_bytes": REMOVER_ISNET_TOTAL,
+        "check_dir": ISNET_DIR,
+        "check_files": {"isnet-general-use.onnx": REMOVER_ISNET_TOTAL},
+        "needs_python": False,
+    },
+    {
+        "id": "remover_silueta",
+        "name": "Silueta",
+        "description": "Model Silueta ringan untuk manusia full-body (~42 MB).",
+        "info": "Varian U²-Net ringan khusus siluet manusia. Paling cepat untuk foto orang.",
+        "script": "dl_remover.ps1",
+        "script_args": ["-Model", "silueta"],
+        "category": "remover",
+        "total_bytes": REMOVER_SILUETA_TOTAL,
+        "check_dir": SILUETA_DIR,
+        "check_files": {"silueta.onnx": REMOVER_SILUETA_TOTAL},
         "needs_python": False,
     },
     {
@@ -625,8 +675,6 @@ def _monitor_orphan(job: SetupJob) -> None:
 
 
 def _restore_jobs() -> None:
-    """Panggil saat server start: pulihkan unduhan yang masih hidup dari
-    sesi sebelumnya supaya UI tetap menampilkan + tidak dobel spawn."""
     global _job_counter
     max_counter = _job_counter
     for e in _load_jobs_file():
@@ -795,7 +843,6 @@ def _run_script(job: SetupJob, script: Path, args: list[str]) -> None:
 
 
 def _handle_waves(job: SetupJob, payload: str) -> None:
-    """Interpret satu pesan protokol WAVES:<...>"""
     key, _, value = payload.partition(" ")
     value = value.strip()
 
@@ -1051,7 +1098,7 @@ async def delete_task(task_id: str):
     task = next((t for t in TASKS if t["id"] == task_id), None)
     if task is None:
         raise HTTPException(404, "Task tidak dikenal")
-    if task.get("category") not in ("model", "model_video"):
+    if task.get("category") not in ("model", "model_video", "remover"):
         raise HTTPException(400, "Hanya task model yang bisa dihapus dari sini")
 
     target = task.get("check_dir")

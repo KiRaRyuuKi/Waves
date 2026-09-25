@@ -1,5 +1,5 @@
 export type SetupTaskStatus = "not_installed" | "installed" | "partial";
-export type SetupTaskCategory = "runtime" | "model" | "model_video" | "stem";
+export type SetupTaskCategory = "runtime" | "model" | "model_video" | "stem" | "remover";
 export type SetupJobStatus = "queued" | "running" | "done" | "error";
 
 export interface SetupTask {

@@ -52,7 +52,7 @@ export default function UploadZone({ onSubmit, disabled }: Props) {
         </div>
 
         <div className="mt-5">
-          <div className="mb-2 text-xs font-semibold text-ink-muted">Model pemisahan</div>
+          <div className="mb-2 text-xs font-semibold text-ink-muted">Model Pemisahan</div>
           <div className="grid grid-cols-3 gap-2">
             {MODEL_OPTIONS.map((opt) => (
               <button
