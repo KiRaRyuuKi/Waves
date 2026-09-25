@@ -89,20 +89,49 @@ def _fetch_text(url: str, timeout: float = 4) -> tuple[bool, Any]:
         return False, None
 
 
+_REPO_SEGMENT_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9_-])?$")
+
+
 def _safe_repo_id(repo: str) -> str:
-    # allow owner/name only
-    if not re.match(r"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$", repo):
+    # A01: hanya "owner/name" dengan tiap segmen bebas dari "..", pemisah path,
+    # dan karakter funky. Regex lama mengizinkan "..", sehingga
+    # LLM_DIR/<repo>/<file> bisa keluar dari LLM_DIR (arbitrary file write).
+    if not isinstance(repo, str) or repo.count("/") != 1:
         raise HTTPException(400, "repoId tidak valid (format owner/name)")
+    owner, name = repo.split("/")
+    for seg in (owner, name):
+        if not seg or ".." in seg or not _REPO_SEGMENT_RE.fullmatch(seg):
+            raise HTTPException(400, "repoId tidak valid (format owner/name)")
     return repo
 
 
-def _sanitize_path(repo: str, filename: str) -> Path:
-    repo_safe = re.sub(r"[^a-zA-Z0-9._/-]", "_", repo)
-    fn_safe = re.sub(r"[^a-zA-Z0-9._-]", "_", filename)
-    # prevent traversal
-    if ".." in fn_safe or "/" in fn_safe or "\\" in fn_safe:
+def _safe_filename(filename: str) -> str:
+    """Kembalikan basename GGUF yang aman, atau 400."""
+    if not isinstance(filename, str) or not filename.strip():
+        raise HTTPException(400, "filename wajib diisi")
+    base = filename.replace("\\", "/").split("/")[-1].strip()
+    if not base or base in (".", "..") or ".." in base:
         raise HTTPException(400, "filename tidak valid")
-    return LLM_DIR / repo_safe / fn_safe
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,180}", base):
+        raise HTTPException(400, "filename tidak valid")
+    if not base.lower().endswith(".gguf"):
+        raise HTTPException(400, "Hanya file .gguf yang didukung")
+    return base
+
+
+def _dest_for(repo: str, filename: str) -> Path:
+    """Bangun path tujuan dan pastikan hasil resolve-nya tetap di LLM_DIR."""
+    safe_repo = _safe_repo_id(repo)
+    safe_name = _safe_filename(filename)
+    dest = LLM_DIR / safe_repo / safe_name
+    root = LLM_DIR.resolve()
+    try:
+        resolved = dest.resolve()
+    except OSError:
+        resolved = dest
+    if root not in resolved.parents:
+        raise HTTPException(400, "lokasi tujuan tidak valid")
+    return dest
 
 
 def _quant_from_filename(name: str) -> str:
@@ -734,21 +763,9 @@ def _payload(job: LlmJob, interpolate: bool = True) -> dict:
 @router.post("/download")
 async def start_download(payload: dict):
     repo = (payload.get("repoId") or payload.get("repo") or "").strip()
-    filename = (payload.get("filename") or "").strip()
-    if not repo or not filename:
-        raise HTTPException(400, "repoId dan filename wajib diisi")
-    _safe_repo_id(repo)
-    if not filename.lower().endswith(".gguf"):
-        raise HTTPException(400, "Hanya file .gguf yang didukung")
-    # prevent path traversal in filename
-    if "/" in filename or "\\" in filename or ".." in filename:
-        # allow subfolder like "some/q4.gguf" ? but HF gguf usually flat; block subdir for safety
-        # if it contains slash, keep only basename but preserve folder guard
-        if "/" in filename:
-            # take basename only, but note repo may have subfolder - but for HF resolve main + filename includes subpath, so allow single level?
-            # we strictly take basename for storage to avoid nested attacks
-            filename = filename.split("/")[-1].split("\\")[-1]
-    dest = LLM_DIR / repo / filename
+    raw_filename = (payload.get("filename") or "").strip()
+    dest = _dest_for(repo, raw_filename)
+    repo, filename = dest.parent.name, dest.name
     # dedup: if same active job exists, return it
     with _lock:
         for j in _jobs.values():
@@ -813,29 +830,15 @@ async def stop_download_job(job_id: str):
 
 @router.delete("/local/{repo_path:path}")
 async def delete_local(repo_path: str, filename: str = Query("")):
-    # repo_path is like "owner/name" ; filename required
-    if not filename:
-        raise HTTPException(400, "filename wajib")
-    # sanitize
-    if "/" in filename or "\\" in filename or ".." in filename:
-        filename = filename.split("/")[-1].split("\\")[-1]
-    # repo_path may contain slash, ensure no traversal
-    repo = re.sub(r"[^a-zA-Z0-9._/-]", "_", repo_path)
-    target = LLM_DIR / repo / filename
-    # also try flat lookup
-    alt = LLM_DIR / repo_path / filename
-    # resolve safely and ensure under LLM_DIR
-    for cand in [target, alt]:
-        try:
-            cand_res = cand.resolve()
-            if LLM_DIR.resolve() not in cand_res.parents and cand_res != LLM_DIR.resolve():
-                continue
-            if cand_res.is_file():
-                cand_res.unlink()
-                return {"deleted": str(cand_res.relative_to(LLM_DIR))}
-        except Exception:
-            continue
-    raise HTTPException(404, "File tidak ditemukan")
+    dest = _dest_for(repo_path, filename or "")
+    try:
+        resolved = dest.resolve()
+        if not resolved.is_file() or LLM_DIR.resolve() not in resolved.parents:
+            raise OSError("not a regular file under LLM_DIR")
+        resolved.unlink()
+        return {"deleted": str(resolved.relative_to(LLM_DIR))}
+    except OSError:
+        raise HTTPException(404, "File tidak ditemukan")
 
 
 # ------------------------------------------------------------------
@@ -885,14 +888,14 @@ def _preset_to_modelfile_params(preset: dict) -> list[str]:
 async def ollama_modelfile_preview(repo: str = Query(""), filename: str = Query(""), model: str = Query("")):
     if not repo or not filename:
         raise HTTPException(400, "repo dan filename wajib")
-    _safe_repo_id(repo)
+    dest = _dest_for(repo, filename)
     # cari file di staging
-    cand = LLM_DIR / repo / filename
+    cand = dest
     if not cand.is_file():
-        cand = LLM_DIR / repo.replace("/", "_") / filename
+        cand = LLM_DIR / repo.replace("/", "_") / dest.name
     if not cand.is_file():
-        raise HTTPException(404, f"File tidak ditemukan di staging: {repo}/{filename}. Unduh dulu via Jelajahi.")
-    if not filename.lower().endswith(".gguf"):
+        raise HTTPException(404, f"File tidak ditemukan di staging: {repo}/{dest.name}. Unduh dulu via Jelajahi.")
+    if not dest.name.lower().endswith(".gguf"):
         raise HTTPException(400, "Hanya .gguf yang bisa di-export ke Ollama. Untuk model non-GGUF, konversi dulu ke GGUF via llama.cpp (convert.py) lalu unduh file .gguf.")
     preset = {}
     if model:
@@ -921,17 +924,17 @@ async def ollama_import(payload: dict):
     model_name = (payload.get("model") or payload.get("name") or "").strip()
     if not repo or not filename:
         raise HTTPException(400, "repo dan filename wajib")
-    _safe_repo_id(repo)
-    if not filename.lower().endswith(".gguf"):
+    dest = _dest_for(repo, filename)
+    if not dest.name.lower().endswith(".gguf"):
         raise HTTPException(400, "Hanya .gguf yang bisa di-export ke Ollama. Konversi ke GGUF dulu (gunakan llama.cpp convert).")
     # sanitize model_name untuk ollama (lowercase, no slash)
     if not model_name:
-        model_name = _sanitize_model_name(f"{repo.split('/')[-1]}-{filename.replace('.gguf','')}")
+        model_name = _sanitize_model_name(f"{repo.split('/')[-1]}-{dest.name.replace('.gguf','')}")
     else:
         model_name = _sanitize_model_name(model_name)
-    cand = LLM_DIR / repo / filename
+    cand = dest
     if not cand.is_file():
-        raise HTTPException(404, f"File tidak ditemukan di staging: {repo}/{filename}")
+        raise HTTPException(404, f"File tidak ditemukan di staging: {repo}/{dest.name}")
     # ambil preset
     cfg = _load_config()
     preset = cfg.get(repo) or cfg.get(model_name) or cfg.get("default") or _default_preset()
@@ -1155,12 +1158,12 @@ async def convert_to_gguf(payload: dict):
             "Untuk sekarang, cukup unduh varian GGUF yang sudah tersedia di HF (mis. TheBloke/*-GGUF) — tidak perlu konversi lokal. "
             "Jika ingin konversi lokal, clone https://github.com/ggerganov/llama.cpp ke vendor/llama lalu jalankan convert.",
         )
-    # Jika script ada, jalankan konversi (stub — butuh model HF snapshot di staging)
-    src = LLM_DIR / repo
+    # A01: _safe_repo_id sudah menolak "..", jadi LLM_DIR/<repo> aman.
+    src = LLM_DIR / _safe_repo_id(repo)
     if not src.is_dir():
         raise HTTPException(404, f"Folder staging tidak ditemukan: {repo}. Unduh dulu atau taruh snapshot HF di {src}")
     import subprocess, tempfile
-    out = LLM_DIR / repo / f"{repo.split('/')[-1]}.gguf"
+    out = src / f"{repo.split('/')[-1]}.gguf"
     try:
         proc = subprocess.run(
             ["python", str(script), str(src), "--outfile", str(out), "--outtype", "q4_k_m"],

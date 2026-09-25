@@ -31,6 +31,29 @@ from text import text_to_sequence  # noqa: E402
 
 MODELS_DIR = Path(__file__).resolve().parent / "storage" / "models"
 
+# A01: model_id datang dari request lalu dipakai untuk membangun path ke
+# checkpoint yang di-load dengan torch.load (weights_only=False). Tanpa
+# validasi, `..` membuat caller bisa menunjuk folder di luar MODELS_DIR dan
+# memicu pemuatan checkpoint arbitrer. Hanya nama folder sederhana yang sah.
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def safe_model_id(model_id: str) -> str:
+    if not isinstance(model_id, str) or not _MODEL_ID_RE.fullmatch(model_id):
+        raise ValueError(f"model_id tidak valid: {model_id!r}")
+    if model_id in (".", "..") or model_id.startswith("."):
+        raise ValueError(f"model_id tidak valid: {model_id!r}")
+    return model_id
+
+
+def model_dir_for(model_id: str) -> Path:
+    """Return folder model yang sudah dipastikan berada di dalam MODELS_DIR."""
+    safe_model_id(model_id)
+    target = (MODELS_DIR / model_id).resolve()
+    if target.parent != MODELS_DIR.resolve():
+        raise ValueError(f"model_id tidak valid: {model_id!r}")
+    return target
+
 # Dipakai otomatis untuk model yang foldernya tidak punya config.json sendiri.
 # Berisi hyperparameter model multi-speaker "vits-models" (804 speaker) yang
 # cocok dengan kumpulan checkpoint karakter di folder ini (lihat README).
@@ -178,14 +201,29 @@ def _load_state_dict(checkpoint_path: Path) -> dict:
     # which training/finetuning script produced them: a plain state_dict,
     # or a dict wrapping one under a "model"/"state_dict" key alongside
     # training metadata (iteration, optimizer, ...). Handle both.
+    #
+    # A08: coba weights_only=True lebih dulu. Pickle yang tertanam object
+    # akan ditolak, sehingga .pth buatan atau hasil unduhan bebas di folder
+    # model tidak lagi cukup untuk menjalankan kode arbitrer saat torch.load.
+    # Fallback ke weights_only=False hanya untuk checkpoint lama yang tidak
+    # kompatibel dengan mode aman.
     try:
-        obj = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        obj = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             f"Gagal membaca checkpoint {checkpoint_path}: modul lama "
             f"`{exc.name}` tidak tersedia di PyTorch ini. Konversikan "
             "checkpoint ke format state_dict baru, atau gunakan model lain."
         ) from exc
+    except Exception:
+        try:
+            obj = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                f"Gagal membaca checkpoint {checkpoint_path}: modul lama "
+                f"`{exc.name}` tidak tersedia di PyTorch ini. Konversikan "
+                "checkpoint ke format state_dict baru, atau gunakan model lain."
+            ) from exc
     if isinstance(obj, dict):
         for key in ("model", "state_dict", "generator"):
             if key in obj and isinstance(obj[key], dict):
@@ -197,7 +235,10 @@ def _load_state_dict(checkpoint_path: Path) -> dict:
 
 
 def _get_or_load(model_id: str, device: str = "cpu") -> VoiceModel:
-    model_dir = MODELS_DIR / model_id
+    try:
+        model_dir = model_dir_for(model_id)
+    except ValueError as exc:
+        raise FileNotFoundError(str(exc)) from exc
     if not model_dir.is_dir():
         raise FileNotFoundError(f"Model '{model_id}' tidak ditemukan di {MODELS_DIR}")
 

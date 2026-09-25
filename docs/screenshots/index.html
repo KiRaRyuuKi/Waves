@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waves — Screenshots</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-subtle: #f9fafb;
+    --bg-inset: #f3f4f6;
+    --border: #e5e7eb;
+    --fg: #111827;
+    --fg-muted: #4b5563;
+    --fg-subtle: #9ca3af;
+    --shadow: 0 1px 2px rgba(17, 24, 39, .04), 0 8px 24px rgba(17, 24, 39, .08);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg-subtle);
+    color: var(--fg);
+    font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
+
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  header img { width: 38px; height: 38px; }
+  h1 { font-size: 1.25rem; margin: 0; letter-spacing: -.01em; }
+  header p { margin: 0; color: var(--fg-muted); font-size: .875rem; }
+
+  /* ---------- stage ---------- */
+  .stage {
+    position: relative;
+    margin-top: 20px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .frame {
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: var(--bg-inset);
+    cursor: zoom-in;
+  }
+
+  .frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 68vh;
+    object-fit: contain;
+  }
+
+  .caption {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .caption .text { flex: 1; min-width: 0; }
+  .caption .title { font-weight: 600; font-size: .9375rem; }
+  .caption .desc {
+    color: var(--fg-muted);
+    font-size: .8125rem;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .count {
+    font-variant-numeric: tabular-nums;
+    font-size: .8125rem;
+    color: var(--fg-muted);
+    padding: 4px 10px;
+    background: var(--bg-inset);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  /* ---------- nav ---------- */
+  .nav { display: flex; gap: 8px; }
+
+  button.nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: .8125rem;
+    font-weight: 500;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+  }
+
+  button.nav-btn:hover:not(:disabled) { background: var(--bg-inset); }
+  button.nav-btn:disabled { opacity: .4; cursor: not-allowed; }
+  button.nav-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+  /* ---------- thumbs ---------- */
+  .thumbs {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-bottom: 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .thumbs button {
+    flex: 0 0 auto;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: var(--bg);
+    cursor: pointer;
+    opacity: .55;
+    transition: opacity .12s, border-color .12s;
+    line-height: 0;
+  }
+
+  .thumbs button:hover { opacity: .85; }
+  .thumbs button[aria-current="true"] { opacity: 1; border-color: var(--fg); }
+  .thumbs button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .thumbs img { display: block; width: 104px; height: 58px; object-fit: cover; border-radius: 6px; }
+
+  .hint { margin-top: 14px; font-size: .75rem; color: var(--fg-subtle); text-align: center; }
+  kbd {
+    font: inherit; font-size: .7rem; padding: 1px 5px;
+    background: var(--bg-inset); border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .back { display: inline-block; margin-bottom: 18px; font-size: .8125rem; color: var(--fg-muted); text-decoration: none; }
+  .back:hover { color: var(--fg); text-decoration: underline; }
+
+  /* ---------- lightbox ---------- */
+  dialog#lightbox {
+    padding: 0; border: 0; background: transparent;
+    width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh;
+  }
+  dialog#lightbox::backdrop { background: rgba(17, 24, 39, .92); }
+  dialog#lightbox img { display: block; max-width: 96vw; max-height: 88vh; }
+  .lb-cap { color: #e5e7eb; text-align: center; font-size: .8125rem; margin-top: 10px; }
+  .lb-close {
+    position: fixed; top: 14px; right: 14px;
+    width: 36px; height: 36px; padding-top: 4px;
+    font-size: 24px; line-height: 1;
+    color: #fff; background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.25); border-radius: 8px; cursor: pointer;
+  }
+  .lb-close:hover { background: rgba(255,255,255,.22); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../../README.md">&larr; Kembali ke README</a>
+
+  <header>
+    <img src="../logo/logo-icon-waves.svg" alt="">
+    <div>
+      <h1>Waves (Screenshots)</h1>
+      <p>Satu gambar pada satu waktu. Klik thumbnail untuk lompat, atau pakai &larr; &rarr;.</p>
+    </div>
+  </header>
+
+  <div class="stage">
+    <button class="frame" id="frame" aria-label="Perbesar screenshot">
+      <img id="shot" src="" alt="">
+    </button>
+    <div class="caption">
+      <div class="text">
+        <div class="title" id="title"></div>
+        <div class="desc" id="desc"></div>
+      </div>
+      <span class="count" id="count"></span>
+      <div class="nav">
+        <button class="nav-btn" id="prev" type="button" aria-label="Screenshot sebelumnya">&larr; Prev</button>
+        <button class="nav-btn" id="next" type="button" aria-label="Screenshot berikutnya">Next &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="thumbs" id="thumbs" role="tablist" aria-label="Daftar screenshot"></div>
+
+  <p class="hint">Tekan <kbd>&larr;</kbd> <kbd>&rarr;</kbd> untuk navigasi &middot; klik gambar untuk layar penuh</p>
+</div>
+
+<dialog id="lightbox">
+  <button class="lb-close" id="lbClose" type="button" aria-label="Tutup">&times;</button>
+  <div style="display:grid;place-items:center;height:100%;padding:40px 16px">
+    <div>
+      <img id="lbImg" src="" alt="">
+      <div class="lb-cap" id="lbCap"></div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  const SHOTS = [
+    { file: "Waves-Stem-Demucs.png",        title: "Stem Separator",        desc: "Upload lagu, pilih model Demucs, lalu mixer real-time 4 stem dengan fader, mute/solo, dan waveform klik-untuk-seek." },
+    { file: "Waves-Music-Studio.png",       title: "Music Studio",           desc: "Hasil pemisahan stem: waveform per-track, level meter, dan export mix (.wav) langsung di browser via OfflineAudioContext." },
+    { file: "Waves-Voice-Synthesis.png",    title: "Voice Synthesis",        desc: "TTS VITS lokal — pilih game & karakter, atur speaker, lalu generate suara tanpa layanan cloud." },
+    { file: "Waves-Fine-Tune-(ID).png",     title: "Fine-tune VITS (ID)",     desc: "Latih model suara berbahasa Indonesia: unggah dataset + transkrip, pantau progres pelatihan, lalu pakai model hasilnya." },
+    { file: "Waves-Image-Studio.png",       title: "Studio Creation — Image", desc: "Image generation dengan Stable Diffusion (diffusers). Model ditaruh manual, tanpa unduh otomatis." },
+    { file: "Waves-Video-Studio.png",       title: "Studio Creation — Video", desc: "Video pendek dari teks dengan AnimateDiff atau Wan 2.1 T2V 1.3B, di-encode ke .mp4 lewat FFmpeg." },
+    { file: "Waves-Studio-Remover.png",     title: "Remover",                desc: "Hapus background foto dengan model lokal: U²-Net, ISNet, dan Silueta — tanpa mengirim gambar ke server luar." },
+    { file: "Waves-LLM-Hub.png",            title: "LLM Hub (GGUF)",         desc: "Unduh model GGUF dari Hugging Face, konversi ke format Ollama, dan kelola model lokal dari satu panel." },
+    { file: "Waves-Screen-Coder.png",       title: "Screen Coder",           desc: "Agent pengodean yang berjalan lokal dengan konfigurasi model sendiri, tanpa API key cloud." },
+    { file: "Waves-Media-Downloader.png",    title: "Media Downloader",       desc: "Unduh media dari berbagai sumber ke folder lokal, lengkap dengan progres dan kecepatan unduhan." },
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const shot = $("shot"), titleEl = $("title"), descEl = $("desc"),
+        countEl = $("count"), prevBtn = $("prev"), nextBtn = $("next"),
+        thumbsEl = $("thumbs"), lb = $("lightbox"), lbImg = $("lbImg"), lbCap = $("lbCap");
+
+  let index = 0;
+
+  const thumbs = SHOTS.map((s, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.title = s.title;
+    b.innerHTML = '<img src="' + s.file + '" alt="' + s.title + '" loading="lazy">';
+    b.addEventListener("click", () => show(i));
+    thumbsEl.appendChild(b);
+    return b;
+  });
+
+  function show(i) {
+    index = (i + SHOTS.length) % SHOTS.length;
+    const s = SHOTS[index];
+    shot.src = s.file;
+    shot.alt = s.title;
+    titleEl.textContent = s.title;
+    descEl.textContent = s.desc;
+    descEl.title = s.desc;
+    countEl.textContent = (index + 1) + " / " + SHOTS.length;
+
+    thumbs.forEach((b, n) => b.setAttribute("aria-current", String(n === index)));
+    thumbs[index].scrollIntoView({ block: "nearest", inline: "nearest" });
+
+    prevBtn.disabled = nextBtn.disabled = false;
+  }
+
+  prevBtn.addEventListener("click", () => show(index - 1));
+  nextBtn.addEventListener("click", () => show(index + 1));
+
+  document.addEventListener("keydown", (e) => {
+    if (lb.open) {
+      if (e.key === "Escape") lb.close();
+      return;
+    }
+    if (e.key === "ArrowLeft")  { e.preventDefault(); show(index - 1); }
+    if (e.key === "ArrowRight") { e.preventDefault(); show(index + 1); }
+  });
+
+  $("frame").addEventListener("click", () => {
+    const s = SHOTS[index];
+    lbImg.src = s.file;
+    lbImg.alt = s.title;
+    lbCap.textContent = s.title;
+    lb.showModal();
+  });
+  $("lbClose").addEventListener("click", () => lb.close());
+  lb.addEventListener("click", (e) => { if (e.target === lb) lb.close(); });
+
+  // swipe
+  let x0 = null;
+  $("frame").addEventListener("touchstart", (e) => { x0 = e.changedTouches[0].clientX; }, { passive: true });
+  $("frame").addEventListener("touchend", (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 50) show(index + (dx < 0 ? 1 : -1));
+    x0 = null;
+  }, { passive: true });
+
+  show(0);
+</script>
+</body>
+</html>

@@ -15,4 +15,4 @@ Jelaskan perubahan secara ringkas.
 - [ ] Jika ubah `vendor/*`, sudah catat upstream di README → Vendor Forks
 - [ ] Update `CHANGELOG.md` (Unreleased) jika perlu
 
-## Screenshot (jika UI)
+## Screenshot

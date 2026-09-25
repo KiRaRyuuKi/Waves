@@ -1,9 +1,13 @@
 import { NextRequest } from "next/server";
+import { requireLocalOrigin } from "@/lib/api/originGuard";
 
-type RouteContext = { params: Promise<{ taskId: string }> };
+type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
-  const { taskId } = await ctx.params;
+  const blocked = requireLocalOrigin(req);
+  if (blocked) return blocked;
+
+  const { id } = await ctx.params;
   const pythonPath = req.nextUrl.searchParams.get("python_path") || "";
   const install = req.nextUrl.searchParams.get("install") || "false";
   const verbose = req.nextUrl.searchParams.get("verbose") || "false";
@@ -16,7 +20,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   let upstream: Response;
   try {
     upstream = await fetch(
-      `http://localhost:9035/api/setup/tasks/${encodeURIComponent(taskId)}/run?${query}`,
+      `http://localhost:9035/api/setup/tasks/${encodeURIComponent(id)}/run?${query}`,
       { method: "POST", cache: "no-store" }
     );
   } catch {

@@ -33,7 +33,10 @@ def _load_base_net(hps, checkpoint_path: Path) -> torch.nn.Module:
 
 
 def _base_checkpoint(model_id: str) -> Path:
-    model_dir = tts.MODELS_DIR / model_id
+    try:
+        model_dir = tts.model_dir_for(model_id)
+    except ValueError as exc:
+        raise FileNotFoundError(str(exc)) from exc
     checkpoint = next(iter(tts._real_checkpoint_candidates(model_dir)), None)
     if checkpoint is not None:
         return checkpoint

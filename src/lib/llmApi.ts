@@ -1,4 +1,3 @@
-// LLM Hub — Hugging Face + GGUF + Ollama/LM Studio
 export interface HfModelCard {
   id: string;
   author: string;

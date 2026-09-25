@@ -64,6 +64,19 @@ _cache: dict[tuple[str, str], object] = {}
 _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 _CHECKPOINT_EXTS = (".safetensors", ".ckpt")
 
+# A01: model_id dari request dipakai untuk membangun path ke folder model.
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _model_dir_for(model_id: str) -> Path:
+    """Pastikan model_id menunjuk folder langsung di bawah MODELS_DIR."""
+    if not isinstance(model_id, str) or not _MODEL_ID_RE.fullmatch(model_id):
+        raise ValueError(f"model_id tidak valid: {model_id!r}")
+    target = (MODELS_DIR / model_id).resolve()
+    if target.parent != MODELS_DIR.resolve():
+        raise ValueError(f"model_id tidak valid: {model_id!r}")
+    return target
+
 
 def _load_json(path: Path) -> dict | None:
     try:
@@ -194,7 +207,10 @@ def _load_pipeline(model_dir: Path, device: str = "cpu"):
 
 
 def _get_or_load(model_id: str, device: str = "cpu"):
-    model_dir = MODELS_DIR / model_id
+    try:
+        model_dir = _model_dir_for(model_id)
+    except ValueError as exc:
+        raise FileNotFoundError(str(exc)) from exc
     if not model_dir.is_dir():
         raise FileNotFoundError(f"Model '{model_id}' tidak ditemukan di {MODELS_DIR}")
 
@@ -312,7 +328,10 @@ async def get_models():
 
 @router.get("/models/{model_id}/cover")
 async def get_cover(model_id: str):
-    model_dir = MODELS_DIR / model_id
+    try:
+        model_dir = _model_dir_for(model_id)
+    except ValueError as exc:
+        raise HTTPException(404, "Model not found") from exc
     if not model_dir.is_dir():
         raise HTTPException(404, "Model not found")
     cover = _find_cover(model_dir)
@@ -322,7 +341,12 @@ async def get_cover(model_id: str):
 
 
 class GenerateRequest(BaseModel):
-    model_id: str
+    model_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        description="Nama folder model di server/storage/generate/image (tanpa path).",
+    )
     prompt: str = Field(min_length=1, max_length=2000)
     negative_prompt: str = Field(default="", max_length=1000)
     steps: int = Field(15, ge=1, le=150)

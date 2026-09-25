@@ -84,9 +84,19 @@ def _load_config() -> dict:
 
 def _save_config(cfg: dict) -> None:
     try:
-        CONFIG_PATH.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-    except Exception:
+        STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CONFIG_PATH.with_name(CONFIG_PATH.name + ".tmp")
+        tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(CONFIG_PATH)
+    except OSError:
         pass
+
+
+# A02/A07: api key tidak pernah dikirim ke client. Editor raw tetap bisa
+# menampilkan file config, tapi nilai key diganti placeholder; saat disimpan,
+# placeholder itu berarti "pertahankan key yang sudah ada".
+_API_KEY_MASK = "********"
+_KEY_FIELDS = ("api_key",)
 
 def _get_api_key(provider: str) -> str | None:
     # Priority: env var > stored config
@@ -451,6 +461,21 @@ async def save_config(req: CoderConfigRequest):
     return {"saved": p}
 
 
+def _mask_secrets(obj: object) -> object:
+    """Salinan config dengan nilai api key diganti placeholder."""
+    if isinstance(obj, dict):
+        out: dict = {}
+        for k, v in obj.items():
+            if k in _KEY_FIELDS and isinstance(v, str) and v:
+                out[k] = _API_KEY_MASK
+            else:
+                out[k] = _mask_secrets(v)
+        return out
+    if isinstance(obj, list):
+        return [_mask_secrets(v) for v in obj]
+    return obj
+
+
 @router.get("/config/raw")
 async def get_config_raw():
     path = CONFIG_PATH
@@ -460,7 +485,7 @@ async def get_config_raw():
             STORAGE_DIR.mkdir(parents=True, exist_ok=True)
             default = {"providers": {}}
             path.write_text(json.dumps(default, indent=2, ensure_ascii=False), encoding="utf-8")
-        except Exception:
+        except OSError:
             pass
     exists = path.is_file()
     raw_text = ""
@@ -477,13 +502,20 @@ async def get_config_raw():
             # file rusak -> jangan 404, kembalikan raw + error field biar editor tetap bisa perbaiki
             raw_text = path.read_text(encoding="utf-8", errors="replace")
             return {"path": str(path), "exists": True, "raw": raw_text, "parsed": None, "error": f"JSON tidak valid: {e.msg} (line {e.lineno} col {e.colno}) — perbaiki di editor lalu Simpan."}
-        except Exception:
+        except OSError:
             raw_text = json.dumps({"providers": {}}, indent=2, ensure_ascii=False)
             parsed = {"providers": {}}
     else:
         raw_text = json.dumps({"providers": {}}, indent=2, ensure_ascii=False)
         parsed = {"providers": {}}
-    return {"path": str(path), "exists": exists, "raw": raw_text, "parsed": parsed}
+    masked = _mask_secrets(parsed)
+    return {
+        "path": str(path),
+        "exists": exists,
+        "raw": json.dumps(masked, indent=2, ensure_ascii=False),
+        "parsed": masked,
+        "secrets_masked": True,
+    }
 
 
 class CoderRawConfigRequest(BaseModel):
@@ -511,13 +543,29 @@ async def put_config_raw(req: CoderRawConfigRequest):
     # Pastikan struktur minimal providers dict jika ada
     if "providers" in data and not isinstance(data["providers"], dict):
         raise HTTPException(400, "Field 'providers' harus object")
+    # A02: placeholder dari editor berarti "jangan sentuh key yang ada".
+    current = _load_config().get("providers") or {}
+    incoming = data.get("providers")
+    if isinstance(incoming, dict):
+        for provider, entry in incoming.items():
+            if not isinstance(entry, dict):
+                continue
+            for field_name in _KEY_FIELDS:
+                if entry.get(field_name) != _API_KEY_MASK:
+                    continue
+                prev = current.get(provider)
+                prev_key = prev.get(field_name) if isinstance(prev, dict) else None
+                if prev_key:
+                    entry[field_name] = prev_key
+                else:
+                    entry.pop(field_name, None)
     # Tulis atomically
     try:
         STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = CONFIG_PATH.with_suffix(".tmp")
+        tmp = CONFIG_PATH.with_name(CONFIG_PATH.name + ".tmp")
         tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         tmp.replace(CONFIG_PATH)
-    except Exception as e:
+    except OSError as e:
         raise HTTPException(500, f"Gagal menyimpan: {e}") from e
     return {"saved": True, "path": str(CONFIG_PATH), "providers": list((data.get("providers") or {}).keys())}
 

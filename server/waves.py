@@ -11,7 +11,6 @@ audit_logger.setLevel(logging.INFO)
 
 import time
 from collections import defaultdict
-from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Form
@@ -22,6 +21,7 @@ from .coder import router as coder_router
 from .image import router as image_router
 from .downloader import router as downloader_router
 from .separator import OUTPUT_ROOT, STORAGE_ROOT, run_separation, stem_file_path
+from .uploads import AUDIO_SUFFIXES, MAX_AUDIO_UPLOAD, copy_limited, safe_suffix
 from .setup import router as setup_router
 from .training import router as training_router
 from .video import router as video_router
@@ -53,31 +53,73 @@ async def add_security_headers(request, call_next):
     return response
 
 
+# A01/CSRF: backend ini tanpa autentikasi dan hanya diikat ke loopback, jadi
+# proteksinya berasal dari CORS. Tapi CORS hanya governs browser; request dari
+# proses lokal atau CLI tidak punya Origin. Endpoint yang mengubah state tetap
+# butuh verifikasi Origin agar tidak bisa dipicu dari halaman web_scheme:// lain
+# (mis. form POST dari situs mana pun ke 127.0.0.1:9035).
+_ALLOWED_ORIGINS = {
+    "http://localhost:3095",
+    "http://127.0.0.1:3095",
+}
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+@app.middleware("http")
+async def origin_guard(request: Request, call_next):
+    if request.method not in _SAFE_METHODS:
+        origin = request.headers.get("origin")
+        if origin is not None and origin not in _ALLOWED_ORIGINS:
+            return JSONResponse(
+                status_code=403, content={"detail": "Origin tidak diizinkan"}
+            )
+    return await call_next(request)
+
+
 # A04: IP-based in-memory rate limiting for local deployment without authentication.
 _rate_store: dict[str, list[float]] = defaultdict(list)
+_rate_lock = threading.Lock()
+_RATE_WINDOW = 60.0
+_RATE_MAX = 20
+_RATE_MAX_TRACKED_IPS = 4096
+
+# Endpoint yang mahal (GPU/CPU_bound, subprocess, unduhan, atau spawn proses).
+# Semua harus ikut rate limit, bukan hanya yang sudah ada di daftar awal.
+_RATE_LIMITED_PREFIXES = (
+    "/api/jobs",
+    "/api/generate",
+    "/api/video/generate",
+    "/api/coder",
+    "/api/setup/tasks",
+    "/api/downloader",
+    "/api/llm/download",
+    "/api/voice/synthesize",
+    "/api/remover/remove",
+    "/api/training",
+    "/api/jobs/retry",
+)
+
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    # Apply limiting only to sensitive and resource-intensive endpoints.
-    sensitive = (
-        request.url.path.startswith("/api/jobs")
-        or request.url.path.startswith("/api/generate")
-        or request.url.path.startswith("/api/video/generate")
-        or request.url.path.startswith("/api/coder")
-        or request.url.path.startswith("/api/setup/tasks")
-        or request.url.path.startswith("/api/downloader")
-        or request.url.path.startswith("/api/llm/download")
-    )
-    if sensitive and request.method == "POST":
+    path = request.url.path
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and path.startswith(_RATE_LIMITED_PREFIXES):
         ip = request.client.host if request.client else "unknown"
         now = time.time()
-        # 60-second sliding window, maximum 20 requests per IP.
-        lst = _rate_store[ip]
-        # Remove timestamps outside the current window.
-        lst[:] = [t for t in lst if now - t < 60]
-        if len(lst) >= 20:
-            return JSONResponse(status_code=429, content={"detail": "Too many requests, please try again in a minute"})
-        lst.append(now)
+        with _rate_lock:
+            # Batasi jumlah IP yang dilacak supaya dict tidak tumbuh tanpa batas.
+            if ip not in _rate_store and len(_rate_store) >= _RATE_MAX_TRACKED_IPS:
+                for stale_ip in list(_rate_store):
+                    if now - (_rate_store[stale_ip][-1] if _rate_store[stale_ip] else 0) >= _RATE_WINDOW:
+                        _rate_store.pop(stale_ip, None)
+            lst = _rate_store[ip]
+            lst[:] = [t for t in lst if now - t < _RATE_WINDOW]
+            if len(lst) >= _RATE_MAX:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many requests, please try again in a minute"},
+                )
+            lst.append(now)
     return await call_next(request)
 
 app.include_router(voice_router)
@@ -113,13 +155,18 @@ async def create_job(
     job_dir = UPLOAD_ROOT / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    suffix = Path(file.filename or "input.wav").suffix or ".wav"
+    suffix = safe_suffix(file.filename, AUDIO_SUFFIXES, ".wav")
     # Persist using job_id as filename to ensure the Demucs output directory
     # (separated/<model>/<stem>/...) remains unique per upload and is not
     # overwritten by subsequent jobs.
     input_path = job_dir / f"{job_id}{suffix}"
-    with input_path.open("wb") as out:
-        shutil.copyfileobj(file.file, out)
+    # A04: copy streaming dengan batas ukuran keras, bukan shutil.copyfileobj
+    # tanpa limit yang bisa menghabiskan disk.
+    try:
+        copy_limited(file.file, input_path, MAX_AUDIO_UPLOAD)
+    except HTTPException:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise
 
     job = Job(id=job_id, model=model, original_filename=file.filename or "input", device=device)
     store.create(job)

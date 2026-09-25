@@ -20,7 +20,10 @@ async def get_models():
 
 @router.get("/models/{model_id}/cover")
 async def get_cover(model_id: str):
-    model_dir = tts.MODELS_DIR / model_id
+    try:
+        model_dir = tts.model_dir_for(model_id)
+    except ValueError as exc:
+        raise HTTPException(404, "Model not found") from exc
     if not model_dir.is_dir():
         raise HTTPException(404, "Model not found")
     for candidate in sorted(model_dir.glob("cover.*")):
@@ -29,7 +32,12 @@ async def get_cover(model_id: str):
 
 
 class SynthesizeRequest(BaseModel):
-    model_id: str
+    model_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        description="Nama folder model di server/storage/models (tanpa path).",
+    )
     text: str = Field(min_length=1, max_length=500)
     speaker_id: int = 0
     noise_scale: float = 0.667

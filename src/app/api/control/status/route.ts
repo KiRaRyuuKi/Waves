@@ -61,7 +61,7 @@ async function readServerState(): Promise<ServerState> {
       startedAt: raw.startedAt,
     };
   } catch {
-    // state.json tidak ada — deteksi langsung apakah port backend/frontend aktif
+    // state.json tidak ada, lakukan deteksi langsung apakah port backend/frontend aktif
     const [bePort, fePort] = await Promise.all([portOpen(9035), portOpen(3095)]);
     if (bePort || fePort) {
       return {

@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 
-type RouteContext = { params: Promise<{ jobId: string }> };
+type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, ctx: RouteContext) {
-  const { jobId } = await ctx.params;
+  const { id } = await ctx.params;
 
   let upstream: Response;
   try {
     upstream = await fetch(
-      `http://localhost:9035/api/setup/jobs/${encodeURIComponent(jobId)}/stream`,
+      `http://localhost:9035/api/setup/jobs/${encodeURIComponent(id)}/stream`,
       { cache: "no-store" }
     );
   } catch {

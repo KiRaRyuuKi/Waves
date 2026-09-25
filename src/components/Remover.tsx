@@ -1073,7 +1073,7 @@ export default function Remover() {
                 Menghapus latar…
               </>
             ) : cutoutUrl ? (
-              "Hapus lagi (pakai AI refine)"
+              "Hapus Lagi (pakai AI refine)"
             ) : (
               "Hapus Background"
             )}
@@ -1163,7 +1163,7 @@ export default function Remover() {
                         onClick={() => setBgImageUrl(null)}
                         className="text-[11px] text-red-600"
                       >
-                        Hapus BG
+                        Hapus Background
                       </button>
                     )}
                   </div>

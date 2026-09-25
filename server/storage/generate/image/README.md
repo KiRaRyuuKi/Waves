@@ -3,7 +3,7 @@
 **Folder model Stable Diffusion untuk halaman **Image Generation**.
 
 Sesuai desain, folder ini **tidak berisi bobot model** dan Waves **tidak
-pernah mengunduh model secara otomatis** — Anda yang menaruh checkpointnya
+pernah mengunduh model secara otomatis**. Anda yang menaruh checkpointnya
 secara manual. Pipa inferensi (`diffusers`) selalu diload dengan
 `local_files_only=True`, jadi kalau foldernya kosong atau folder model
 tidak ada, request akan gagal dengan pesan yang jelas, bukan men-download.
@@ -48,7 +48,7 @@ Taruh satu file `*.safetensors` (atau `*.ckpt`) di
 ```
 
 Waves akan memuatnya dengan `from_single_file(...)`. Kalau `vae` disebut
-di `config.json`, nilai itu harus berupa folder diffusers **lokal** — Waves
+di `config.json`, nilai itu harus berupa folder diffusers **lokal**. Waves
 tidak pernah mengunduh VAE dari internet. Kosongkan/hapus field `vae`
 untuk VAE bawaan checkpoint.
 
@@ -71,7 +71,7 @@ Tanpa `meta.json`, nama folder dipakai apa adanya.
 
 1. Taruh model di `server/storage/generate/image/<model_id>/`.
 2. Mulai backend: `uvicorn server.waves:app --port 9035`.
-3. `GET /api/models` — pastikan model muncul.
+3. `GET /api/models` pastikan model muncul.
 4. `POST /api/generate` dengan `{"model_id": "<id>", "prompt": "..."}`.
 
 Bobot model (.safetensors/.ckpt/.bin, multi-GB) sengaja di-ignore oleh

@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import net from "node:net";
+import { NextRequest } from "next/server";
+import { requireLocalOrigin } from "@/lib/api/originGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +20,10 @@ function portOpen(port: number): Promise<boolean> {
   });
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const blocked = requireLocalOrigin(req);
+  if (blocked) return blocked;
+
   const root = process.cwd();
   const backendUp = await portOpen(9035);
 

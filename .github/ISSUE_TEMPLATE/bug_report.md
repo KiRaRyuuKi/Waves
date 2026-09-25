@@ -23,6 +23,6 @@ Paste log dari console atau `server/storage/jobs.json` jika relevan.
 ## Lingkungan
 - OS:
 - Node / Python / FFmpeg version:
-- Waves version: (`v1.1.5-preview` atau `main`)
+- Waves version: (`v1.1.5-preview` atau `v1.0.5-beta`)
 
 ## Tambahan

@@ -11,7 +11,8 @@ interface Channel {
   gainNode: GainNode;
   analyser: AnalyserNode;
   source: AudioBufferSourceNode | null;
-  volume: number; // 0..1.2, user-facing fader value
+  // 0..1.2, user-facing fader value
+  volume: number;
   muted: boolean;
   solo: boolean;
 }

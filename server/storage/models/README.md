@@ -2,14 +2,14 @@
 
 **Katalog & Checkpoint Model Suara VITS untuk Waves**
 
-Folder ini adalah rumah bagi model suara VITS yang dipakai pada halaman **Voice Synthesis** dan **Fine-tune**. Setiap model disimpan per karakter, cukup dengan satu file checkpoint `.pth` — `config.json` dan `meta.json` bersifat **opsional** (dipakai otomatis dari default/katalog saat tidak ada).
+Folder ini adalah rumah bagi model suara VITS yang dipakai pada halaman **Voice Synthesis** dan **Fine-tune**. Setiap model disimpan per karakter, cukup dengan satu file checkpoint `.pth`, `config.json` dan `meta.json` bersifat **opsional** (dipakai otomatis dari default/katalog saat tidak ada).
 
 ---
 
 ## 🚀 Ringkasan
 
 - **Satu model, banyak suara**: Koleksi ini adalah satu model multi-speaker (804 suara) yang disalin/disimbolkan per karakter; speaker di-pilih lewat `sid`.
-- **Pemilihan by nama**: User di UI memilih **nama karakter**, bukan id numerik — speaker id (`default_sid`) diisi otomatis dari katalog `info.json`.
+- **Pemilihan by nama**: User di UI memilih **nama karakter**, bukan id numerik, speaker id (`default_sid`) diisi otomatis dari katalog `info.json`.
 - **Checkpoint asli**: File `.pth` asli (atau pointer Git LFS yang belum ter-download, ditandai sebagai *belum siap*).
 - **Validasi cepat**: `GET /api/voice/models` lalu `POST /api/voice/synthesize` untuk memastikan karakter baru berfungsi.
 
@@ -22,7 +22,8 @@ server/storage/models/
 └── <model_id>/
     ├── config.json        # (opsional) hyperparameter khusus model ini
     ├── meta.json          # (opsional) metadata kustom yang tampil di UI
-    └── <model_id>.pth     # checkpoint VITS (bobot)
+    ├── <model_id>.pth     # checkpoint VITS (bobot)
+    └── cover.png          # (opsional) gambar cover di UI
 ```
 
 ## ⚙️ Cara Kerja
@@ -31,11 +32,11 @@ server/storage/models/
 
 `info.json` di akar folder adalah katalog berisi `model_id -> {...}` dengan field yang dipakai otomatis:
 
-- `name_en` / `name_zh` / `title` — nama karakter (dipakai sebagai nama model; urutan prioritas: `title` > `name_en` > `name_zh`)
-- `sid` — speaker id; menjadi `default_sid`
-- `example` — contoh teks default di textbox
+- `name_en` / `name_zh` / `title` : nama karakter (dipakai sebagai nama model; urutan prioritas: `title` > `name_en` > `name_zh`)
+- `sid` : speaker id; menjadi `default_sid`
+- `example` : contoh teks default di textbox
 - `language`, `enable`
-- `cover` — path gambar karakter
+- `cover` : path gambar karakter
 
 `list_models()` menggabungkan folder yang ada dengan katalog ini; folder yang cukup berisi `*.pth` tetap dikenali (tanpa `config.json`/`meta.json`).
 
@@ -71,4 +72,4 @@ Untuk model single-speaker, cukup satu entri di `speakers` dengan `id: 0`.
 4. (Opsional) taruh `cover.png` dan `config.json` jika perlu.
 5. Coba `GET /api/voice/models` lalu `POST /api/voice/synthesize` dengan `model_id` folder tadi.
 
-File `.pth` sengaja tidak ikut ke-track di git (lihat `.gitignore`); `info.json`, `config.json`, dan `meta.json` kecil jadi boleh di-commit.
+File `.pth` umumnya tidak ikut ke-track di Git (lihat `.gitignore`); `info.json`, `config.json`, dan `meta.json` kecil boleh di-commit. Checkpoint contoh `kafka/kafka.pth` disimpan melalui Git LFS agar dapat diambil dengan `git lfs pull`.

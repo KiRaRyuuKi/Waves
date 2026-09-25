@@ -256,6 +256,8 @@ def remove_background_bytes(image_bytes: bytes, model_id: str = "u2net") -> byte
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import Response
 
+from .uploads import MAX_IMAGE_UPLOAD, read_limited
+
 router = APIRouter(prefix="/api/remover", tags=["remover"])
 
 @router.get("/models")
@@ -285,11 +287,7 @@ async def api_remove(
         raise HTTPException(403, str(e))
     # Validasi model
     model = model.strip().lower()
-    data = await file.read()
-    if not data:
-        raise HTTPException(400, "File kosong")
-    if len(data) > 20 * 1024 * 1024:
-        raise HTTPException(400, "File terlalu besar (maks 20MB)")
+    data = await read_limited(file, MAX_IMAGE_UPLOAD)
     # Validasi magic bytes gambar
     if not (data.startswith(b"\x89PNG") or data.startswith(b"\xff\xd8\xff") or data.startswith(b"GIF") or data.startswith(b"RIFF") or data[:2] == b"BM"):
         # tetap izinkan, rembg/Pillow akan error jika bukan gambar

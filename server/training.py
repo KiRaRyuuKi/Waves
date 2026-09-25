@@ -13,6 +13,7 @@ from . import devices
 from . import finetune
 from . import tts
 from .separator import STORAGE_ROOT
+from .uploads import MAX_DATASET_AUDIO, MAX_DATASET_FILES, copy_limited
 
 router = APIRouter(prefix="/api/training", tags=["training"])
 
@@ -28,13 +29,28 @@ _DEFAULT_LR = 2e-4
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
+# A01: dataset_id datang dari URL/body lalu dipakai sebagai komponen path.
+# Hanya izinkan nama folder sederhana agar tidak bisa keluar dari TRAINING_ROOT.
+_DATASET_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _dataset_dir(dataset_id: str) -> Path:
+    if not isinstance(dataset_id, str) or not _DATASET_ID_RE.fullmatch(dataset_id):
+        raise HTTPException(400, "Dataset id tidak valid")
+    target = (TRAINING_ROOT / dataset_id).resolve()
+    if target.parent != TRAINING_ROOT.resolve():
+        raise HTTPException(400, "Dataset id tidak valid")
+    return TRAINING_ROOT / dataset_id
+
 
 def _slugify(name: str) -> str:
     return _SLUG_RE.sub("-", name.strip().lower()).strip("-")
 
 
 def _unique_model_id(name: str) -> str:
-    base = _slugify(name)
+    # Nama kosong/only-symbol akan menjadi string kosong setelah slugify, yang
+    # akan menunjuk ke MODELS_DIR itu sendiri — fallback ke "model".
+    base = _slugify(name) or "model"
     candidate = base
     n = 2
     while (tts.MODELS_DIR / candidate).exists():
@@ -69,42 +85,57 @@ async def create_dataset(
         raise HTTPException(400, "Field 'transcripts' bukan JSON valid.") from exc
     if not isinstance(transcript_list, list) or not transcript_list:
         raise HTTPException(400, "Minimal satu pasangan audio+transkrip.")
+    if len(files) > MAX_DATASET_FILES:
+        raise HTTPException(400, f"Maksimal {MAX_DATASET_FILES} file per dataset.")
 
-    original_names = [files[i].filename for i in range(len(files))]
-    stored_names = {orig: f"{i:04d}_{_safe_basename(orig)}" for i, orig in enumerate(original_names)}
+    import shutil
+
+    # Kunci map pakai index, bukan filename: dua file dengan nama sama akan
+    # saling menimpa kalau filename jadi kunci dict.
+    stored_names: dict[int, str] = {
+        i: f"{i:04d}_{_safe_basename(files[i].filename)}" for i in range(len(files))
+    }
+    name_to_index: dict[str, int] = {}
+    for i, uploaded in enumerate(files):
+        name_to_index.setdefault(uploaded.filename or "", i)
 
     dataset_id = uuid.uuid4().hex[:8]
     dataset_dir = TRAINING_ROOT / dataset_id
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
-    for uploaded in files:
-        orig = uploaded.filename or ""
-        if orig not in stored_names:
-            continue
-        with (dataset_dir / stored_names[orig]).open("wb") as out:
-            import shutil
-
-            shutil.copyfileobj(uploaded.file, out)
+    # A04: copy streaming dengan batas ukuran per file + total.
+    total_bytes = 0
+    try:
+        for i, uploaded in enumerate(files):
+            written = copy_limited(uploaded.file, dataset_dir / stored_names[i], MAX_DATASET_AUDIO)
+            total_bytes += written
+            if total_bytes > MAX_DATASET_AUDIO * 4:
+                raise HTTPException(413, "Total ukuran dataset melebihi batas")
+    except HTTPException:
+        shutil.rmtree(dataset_dir, ignore_errors=True)
+        raise
 
     saved_count = 0
     entries = []
     for item in transcript_list:
+        if not isinstance(item, dict):
+            continue
         orig = item.get("file") or ""
         text = str(item.get("text", "")).strip()
-        stored_name = stored_names.get(orig)
-        if stored_name is None:
+        idx = name_to_index.get(orig)
+        if idx is None:
             continue
+        stored_name = stored_names[idx]
         src = dataset_dir / stored_name
         if not src.exists():
             continue
         if not text:
+            shutil.rmtree(dataset_dir, ignore_errors=True)
             raise HTTPException(400, f"Transkrip kosong untuk {orig}.")
         entries.append({"file": stored_name, "original": orig, "text": text})
         saved_count += 1
 
     if saved_count == 0:
-        import shutil
-
         shutil.rmtree(dataset_dir, ignore_errors=True)
         raise HTTPException(400, "Tidak ada pasangan audio+teks yang diterima.")
 
@@ -142,7 +173,7 @@ class TranscriptPatch(BaseModel):
 
 @router.patch("/datasets/{dataset_id}")
 async def update_transcript(dataset_id: str, patch: TranscriptPatch):
-    dataset_dir = TRAINING_ROOT / dataset_id
+    dataset_dir = _dataset_dir(dataset_id)
     entries = _dataset_entries(dataset_dir)
     if not entries:
         raise HTTPException(404, "Dataset tidak ditemukan.")
@@ -165,7 +196,7 @@ async def update_transcript(dataset_id: str, patch: TranscriptPatch):
 
 @router.delete("/datasets/{dataset_id}")
 async def delete_dataset(dataset_id: str):
-    dataset_dir = TRAINING_ROOT / dataset_id
+    dataset_dir = _dataset_dir(dataset_id)
     if not dataset_dir.is_dir():
         raise HTTPException(404, "Dataset tidak ditemukan.")
     import shutil
@@ -223,7 +254,7 @@ async def start_training(params: TrainingStart):
                 "Hentikan dulu atau tunggu selesai.",
             )
 
-    dataset_dir = TRAINING_ROOT / params.dataset_id
+    dataset_dir = _dataset_dir(params.dataset_id)
     if not _dataset_entries(dataset_dir):
         raise HTTPException(404, "Dataset tidak ditemukan.")
 

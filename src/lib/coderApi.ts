@@ -14,7 +14,8 @@ export interface CoderConfigStatus {
 }
 
 export interface CoderGenerateParams {
-  imageB64: string; // data URL or raw base64
+  // data URL or raw base64
+  imageB64: string;
   stack: CoderStack;
   prompt?: string;
   provider?: CoderProvider;

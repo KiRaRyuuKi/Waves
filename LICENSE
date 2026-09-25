@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Muhammad Ilham (KiRaRyuuKi) — Waves
+Copyright (c) Muhammad Ilham (KiRaRyuuKi) Waves
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,8 @@ SOFTWARE.
 
 ---
 Third-party notices:
-- Demucs (vendor/stem) — MIT License, Copyright (c) Facebook, Inc. and affiliates
-- VITS (vendor/vits) — Apache 2.0 / MIT depending on upstream
-- llama.cpp (vendor/llama) — MIT License
-- ScreenCoder / Coder (vendor/coder) — upstream license retained in vendor/coder/LICENSE
+- Demucs (vendor/stem) : MIT License, Copyright (c) Facebook, Inc. and affiliates
+- VITS (vendor/vits) : Apache 2.0 / MIT depending on upstream
+- llama.cpp (vendor/llama) : MIT License
+- ScreenCoder / Coder (vendor/coder) : upstream license retained in vendor/coder/LICENSE
 See each vendor/**/LICENSE or README for full attribution.

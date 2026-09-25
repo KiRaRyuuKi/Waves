@@ -95,14 +95,23 @@ class JobStore:
             self._jobs[job.id] = job
 
     def _save(self) -> None:
+        # A05: tulis ke file sementara lalu replace atomik. Menulis langsung ke
+        # JOBS_FILE bisa menyisakan JSON terpotong kalau server mati di tengah
+        # (atau dua thread menulis bersamaan), dan seluruh riwayat job hilang.
+        with self._lock:
+            items = [asdict(job) for job in self._jobs.values()]
+        tmp = JOBS_FILE.with_name(JOBS_FILE.name + ".tmp")
         try:
             STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
-            items = [asdict(job) for job in self._jobs.values()]
-            JOBS_FILE.write_text(json.dumps(items, indent=2), encoding="utf-8")
+            tmp.write_text(json.dumps(items, indent=2), encoding="utf-8")
+            tmp.replace(JOBS_FILE)
         except OSError:
             # Persistence is best-effort for a local tool; never crash the
             # request path because the snapshot couldn't be written.
-            pass
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     # --- Disk reconciliation ---
 

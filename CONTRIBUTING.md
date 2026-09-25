@@ -1,6 +1,6 @@
 # Contributing to Waves
 
-Terima kasih sudah mau berkontribusi! Waves adalah proyek open-source berkelanjutan — semua kontribusi dihargai.
+Terima kasih sudah mau berkontribusi! Waves adalah proyek open-source berkelanjutan, semua kontribusi dihargai.
 
 ## Cara Kontribusi
 
@@ -10,7 +10,7 @@ Terima kasih sudah mau berkontribusi! Waves adalah proyek open-source berkelanju
    ```
 2. **Instal & jalankan** sesuai `README.md` (`npm install`, `pip install -r requirements.txt`, `npm run waves` atau `npm run dev` + `uvicorn server.waves:app --port 9035`).
 3. **Commit** dengan format Title Case seperti riwayat (`Refactor ...`, `Fix ...`, `Add ...`) dan body deskriptif.
-4. **Push** branch-mu dan buka **Pull Request** — isi template PR, jelaskan perubahan + screenshot jika UI.
+4. **Push** branch-mu dan buka **Pull Request**, isi template PR, jelaskan perubahan + screenshot jika UI.
 5. Pastikan `npm run lint` / `npm run build` lolos dan tidak menambah secret / kredensial.
 
 ## Laporan Bug & Request Fitur
@@ -21,8 +21,8 @@ Terima kasih sudah mau berkontribusi! Waves adalah proyek open-source berkelanju
 ## Gaya Kode
 
 - Frontend: TypeScript + Tailwind, komponen kecil di `src/components/`
-- Backend: FastAPI di `server/`, hindari hardcoded `sys.executable` — pakai `sys.executable` dari venv
-- Jangan commit file hasil generate, model besar (`.pth`, `*.gguf` di `server/storage/`), atau secrets — sudah di `.gitignore`
+- Backend: FastAPI di `server/`, hindari hardcoded `sys.executable`, pakai `sys.executable` dari venv
+- Jangan commit file hasil generate, model besar (`.pth`, `*.gguf` di `server/storage/`), atau secrets, sudah di `.gitignore`
 - Vendor forks (`vendor/stem`, `vendor/llama`, `vendor/coder`, `vendor/vits`) jangan di-edit langsung tanpa catat upstream di `README.md` → Vendor Forks
 
 ## Vendor Forks

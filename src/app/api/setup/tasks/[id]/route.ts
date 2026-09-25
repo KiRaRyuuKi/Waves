@@ -1,14 +1,18 @@
 import { NextRequest } from "next/server";
+import { requireLocalOrigin } from "@/lib/api/originGuard";
 
-type RouteContext = { params: Promise<{ taskId: string }> };
+type RouteContext = { params: Promise<{ id: string }> };
 
-export async function DELETE(_req: NextRequest, ctx: RouteContext) {
-  const { taskId } = await ctx.params;
+export async function DELETE(req: NextRequest, ctx: RouteContext) {
+  const blocked = requireLocalOrigin(req);
+  if (blocked) return blocked;
+
+  const { id } = await ctx.params;
 
   let upstream: Response;
   try {
     upstream = await fetch(
-      `http://localhost:9035/api/setup/tasks/${encodeURIComponent(taskId)}`,
+      `http://localhost:9035/api/setup/tasks/${encodeURIComponent(id)}`,
       { method: "DELETE", cache: "no-store" }
     );
   } catch {
