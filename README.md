@@ -20,7 +20,7 @@ Klik untuk membuka galeri lengkap dengan navigasi `←` / `→`.
   <img src="docs/screenshots/Waves-Music-Studio.png" alt="Waves Music Studio" width="880">
 </a>
 
-👉 **[Buka galeri lengkap (10 screenshot)](docs/screenshots/index.html)**, tombol **Prev**/**Next**, tombol panah keyboard, thumbnail untuk lompat langsung, swipe di perangkat sentuh, dan klik gambar untuk layar penuh.
+👉 **[Buka galeri lengkap (11 screenshot)](docs/screenshots/index.html)**, tombol **Prev**/**Next**, tombol panah keyboard, thumbnail untuk lompat langsung, swipe di perangkat sentuh, dan klik gambar untuk layar penuh.
 
 ## 🚀 Fitur Utama
 

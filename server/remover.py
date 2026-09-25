@@ -18,6 +18,32 @@ os.environ["XDG_DATA_HOME"] = str(PROJECT_ROOT / "server" / "storage")
 
 REMOVER_ROOT.mkdir(parents=True, exist_ok=True)
 
+# rembg mencocokkan model lewat `session.name()`, bukan lewat id bebas.
+# Beberapa model Waves memakai id yang lebih pendek dari nama session rembg,
+# jadi pemetaan di sini WAJIB sinkron dengan folder unduhan di `server/setup.py`
+# dan `scripts/dl_remover.ps1`.
+REMBG_SESSION_BY_ID = {
+    "u2net": "u2net",
+    "isnet": "isnet-general-use",
+    "silueta": "silueta",
+}
+
+# Folder di REMOVER_ROOT yang sah untuk sebuah nama session rembg.
+# Unduh lewat Setup & Runtime memakai folder `isnet` untuk model
+# `isnet-general-use`, jadi keduanya harus dikenali.
+SESSION_FOLDER_ALIASES = {
+    "isnet-general-use": ("isnet",),
+}
+
+def _session_dirs(session_name: str) -> list[Path]:
+    """Semua direktori yang boleh menyimpan berkas model ini."""
+    names = (session_name, *SESSION_FOLDER_ALIASES.get(session_name, ()))
+    dirs: list[Path] = []
+    for n in names:
+        dirs.append(REMOVER_ROOT / n)
+        dirs.append(REMOVER_ROOT / "models" / n)
+    return dirs
+
 def _is_in_project(p: Path) -> bool:
     try:
         p.resolve().relative_to(PROJECT_ROOT.resolve())
@@ -83,24 +109,19 @@ try:
     @classmethod
     def _patched_model_dir(cls, *a, **k):
         # Layout project: server/storage/remover/<model>/<model>.onnx
-        # Juga dukung layout standar: server/storage/remover/models/<model>/<model>.onnx
-        # Prioritaskan layout project (tanpa models)
-        direct = REMOVER_ROOT / cls.name(*a, **k)
-        # jika folder direct ada, pakai itu; fallback ke models/
-        if direct.is_dir():
-            return str(direct)
-        return str(REMOVER_ROOT / "models" / cls.name(*a, **k))
+        # Junction dengan layout standar: server/storage/remover/models/<model>/
+        # plus folder alias (mis. isnet-general-use -> isnet)
+        candidates = _session_dirs(cls.name(*a, **k))
+        for d in candidates:
+            if d.is_dir():
+                return str(d)
+        return str(candidates[0])
 
     @classmethod
     def _patched_resolve_existing(cls, fname, *a, **k):
         # Cek semua kemungkinan layout di dalam REMOVER_ROOT saja
-        name = cls.name(*a, **k)
-        candidates = [
-            REMOVER_ROOT / name / fname,
-            REMOVER_ROOT / "models" / name / fname,
-            REMOVER_ROOT / fname,
-        ]
-        for p in candidates:
+        for d in _session_dirs(cls.name(*a, **k)):
+            p = d / fname
             if p.is_file():
                 return str(p)
         return None
@@ -130,14 +151,16 @@ try:
     for _cls in sessions_class:
         @classmethod
         def _patched_download(cls_, *a, **kw):
-            fname = f"{cls_.name(*a, **kw)}.onnx"
+            session_name = cls_.name(*a, **kw)
+            fname = f"{session_name}.onnx"
             existing = cls_.resolve_existing(fname, *a, **kw)
             if existing is not None:
                 return existing
+            where = "\n  ".join(str(d) for d in _session_dirs(session_name))
             raise FileNotFoundError(
-                f"Model '{cls_.name(*a, **kw)}' tidak ditemukan di {REMOVER_ROOT}. "
-                f"Letakkan file ONNX di: {REMOVER_ROOT / cls_.name(*a, **kw) / fname} "
-                f"atau {REMOVER_ROOT / 'models' / cls_.name(*a, **kw) / fname}. "
+                f"Model '{session_name}' tidak ditemukan di {REMOVER_ROOT}. "
+                f"Letakkan file ONNX di salah satu folder berikut:\n  {where}\n"
+                f"Nama berkas harus '{fname}'. "
                 f"Tidak ada download otomatis ke ~/.rembg."
             )
         _cls.download_models = _patched_download
@@ -233,10 +256,21 @@ def _get_session(model_id: str):
             f"Model '{model_id}' tidak ditemukan di {REMOVER_ROOT}. "
             f"Model tersedia: {list(models.keys()) or 'tidak ada'}"
         )
+    # Terjemahkan id Waves -> nama session rembg (mis. isnet -> isnet-general-use)
+    rembg_name = REMBG_SESSION_BY_ID.get(model_id, model_id)
     from rembg.session_factory import new_session
     # REMBG_HOME sudah dipaksa ke REMOVER_ROOT, jadi new_session akan
     # memanggil patched download_models yang hanya cek lokal
-    sess = new_session(model_id)
+    try:
+        sess = new_session(rembg_name)
+    except ValueError as e:
+        # Pesan rembg ("No session class found for model 'x'") tidak
+        # menyebut daftar yang valid — ganti dengan yang bisa ditindaklanjuti.
+        supported = sorted(set(REMBG_SESSION_BY_ID) | set(REMBG_SESSION_BY_ID.values()))
+        raise ValueError(
+            f"Model remover '{model_id}' tidak dikenali oleh rembg (session "
+            f"'{rembg_name}'). Model yang didukung: {supported}"
+        ) from e
     _session_cache[model_id] = sess
     return sess
 

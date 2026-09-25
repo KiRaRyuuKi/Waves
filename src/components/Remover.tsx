@@ -106,7 +106,7 @@ export default function Remover() {
     loadModels();
   }, [loadModels]);
 
-  // Auto-refresh saat download selesai di Setup (poll tiap 3s jika ada yang belum terpasang) — jaga pilihan user
+  // Auto-refresh saat download selesai di Setup (poll tiap 3s jika ada yang belum terpasang), jaga pilihan user
   useEffect(() => {
     if (backendDown) return;
     const hasPending = models !== null && models.some((m) => !m.installed);
@@ -479,7 +479,6 @@ export default function Remover() {
       const sw = oImg.naturalWidth * s;
       const sh = oImg.naturalHeight * s;
       ctx.drawImage(oImg, (w - sw) / 2, (h - sh) / 2, sw, sh);
-      ctx.fillRect(4, 4, 48, 18);
       ctx.restore();
       // divider
       ctx.fillStyle = "#fff";
@@ -548,7 +547,8 @@ export default function Remover() {
     const r = (brushSize / 2) * scale;
     const sx = c.x - crect.left;
     const sy = c.y - crect.top;
-    const splitX = rect.left + (w * compare / 100) * scale; // posisi split di viewport
+    // posisi split di viewport
+    const splitX = rect.left + (w * compare / 100) * scale;
     const handleY = rect.top + rect.height / 2;
     const distHandle = Math.hypot(c.x - splitX, c.y - handleY);
     const isNearHandle = distHandle < 22 && compare > 0 && compare < 100;
@@ -1149,7 +1149,7 @@ export default function Remover() {
                       htmlFor="bg-image"
                       className="cursor-pointer rounded-md border border-edge bg-white px-2.5 py-1 text-xs hover:bg-canvas-subtle"
                     >
-                      Pilih gambar BG
+                      Pilih gambar Background
                     </label>
                     <input
                       id="bg-image"
@@ -1313,7 +1313,7 @@ export default function Remover() {
           )}
         </div>
 
-        <div className="card flex min-h-[560px] flex-col p-5">
+        <div className="card flex min-h-[360px] flex-col p-5">
           {!originalUrl && !cutoutUrl && !removing && (
             <div className="flex min-h-[420px] flex-1 items-center justify-center rounded-md border-2 border-dashed border-edge text-[13px] text-ink-muted">
               Preview akan muncul di sini — upload gambar lalu Hapus Background.
@@ -1334,7 +1334,7 @@ export default function Remover() {
             </div>
           )}
           {removing && (
-            <div className="flex min-h-[420px] flex-1 flex-col items-center justify-center gap-3 text-ink-muted">
+            <div className="flex min-h-[360px] flex-1 flex-col items-center justify-center gap-3 text-ink-muted">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-muted border-t-transparent" />
               <div className="text-[13px]">
                 Menghapus latar dengan {selectedMeta?.name ?? modelId}…

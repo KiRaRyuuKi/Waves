@@ -218,16 +218,17 @@
 
 <script>
   const SHOTS = [
-    { file: "Waves-Stem-Demucs.png",        title: "Stem Separator",        desc: "Upload lagu, pilih model Demucs, lalu mixer real-time 4 stem dengan fader, mute/solo, dan waveform klik-untuk-seek." },
-    { file: "Waves-Music-Studio.png",       title: "Music Studio",           desc: "Hasil pemisahan stem: waveform per-track, level meter, dan export mix (.wav) langsung di browser via OfflineAudioContext." },
-    { file: "Waves-Voice-Synthesis.png",    title: "Voice Synthesis",        desc: "TTS VITS lokal — pilih game & karakter, atur speaker, lalu generate suara tanpa layanan cloud." },
+    { file: "Waves-Music-Studio.png",       title: "Music Studio",            desc: "Hasil pemisahan stem: waveform per-track, level meter, dan export mix (.wav) langsung di browser via OfflineAudioContext." },
+    { file: "Waves-Stem-Demucs.png",        title: "Stem Separator",          desc: "Upload lagu, pilih model Demucs, lalu mixer real-time 4 stem dengan fader, mute/solo, dan waveform klik-untuk-seek." },
+    { file: "Waves-Voice-Synthesis.png",    title: "Voice Synthesis",         desc: "TTS VITS lokal — pilih game & karakter, atur speaker, lalu generate suara tanpa layanan cloud." },
     { file: "Waves-Fine-Tune-(ID).png",     title: "Fine-tune VITS (ID)",     desc: "Latih model suara berbahasa Indonesia: unggah dataset + transkrip, pantau progres pelatihan, lalu pakai model hasilnya." },
     { file: "Waves-Image-Studio.png",       title: "Studio Creation — Image", desc: "Image generation dengan Stable Diffusion (diffusers). Model ditaruh manual, tanpa unduh otomatis." },
     { file: "Waves-Video-Studio.png",       title: "Studio Creation — Video", desc: "Video pendek dari teks dengan AnimateDiff atau Wan 2.1 T2V 1.3B, di-encode ke .mp4 lewat FFmpeg." },
-    { file: "Waves-Studio-Remover.png",     title: "Remover",                desc: "Hapus background foto dengan model lokal: U²-Net, ISNet, dan Silueta — tanpa mengirim gambar ke server luar." },
-    { file: "Waves-LLM-Hub.png",            title: "LLM Hub (GGUF)",         desc: "Unduh model GGUF dari Hugging Face, konversi ke format Ollama, dan kelola model lokal dari satu panel." },
-    { file: "Waves-Screen-Coder.png",       title: "Screen Coder",           desc: "Agent pengodean yang berjalan lokal dengan konfigurasi model sendiri, tanpa API key cloud." },
-    { file: "Waves-Media-Downloader.png",    title: "Media Downloader",       desc: "Unduh media dari berbagai sumber ke folder lokal, lengkap dengan progres dan kecepatan unduhan." },
+    { file: "Waves-Studio-Remover.png",     title: "Remover",                 desc: "Hapus background foto dengan model lokal: U²-Net, ISNet, dan Silueta — tanpa mengirim gambar ke server luar." },
+    { file: "Waves-LLM-Hub.png",            title: "LLM Hub (GGUF)",          desc: "Unduh model GGUF dari Hugging Face, konversi ke format Ollama, dan kelola model lokal dari satu panel." },
+    { file: "Waves-LLM-Detail.png",         title: "LLM Hub Detail",          desc: "Detail tentang model GGUF yang telah diunduh dan dikonversi." },
+    { file: "Waves-Screen-Coder.png",       title: "Screen Coder",            desc: "Agent pengodean yang berjalan lokal dengan konfigurasi model sendiri, tanpa API key cloud." },
+    { file: "Waves-Media-Downloader.png",   title: "Media Downloader",        desc: "Unduh media dari berbagai sumber ke folder lokal, lengkap dengan progres dan kecepatan unduhan." },
   ];
 
   const $ = (id) => document.getElementById(id);
