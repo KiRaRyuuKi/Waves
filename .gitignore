@@ -36,6 +36,9 @@ venv/
 *.gguf
 *.bin
 
+# Keep the initial VITS example in Git LFS
+!server/storage/models/kafka/kafka.pth
+
 *.log
 
 *.backup.gif
