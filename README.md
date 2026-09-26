@@ -4,7 +4,7 @@
 
 **Toolkit Utilitas Pintar untuk Mempermudah Kreasimu, Fleksibel dan Akan Terus Bertumbuh**
 
-Waves adalah toolkit dengan beragam utilitas pintar untuk mempermudah kreasimu. Setiap utilitas berdiri sendiri. Dapat kamu pakai untuk suatu saat, digabung, atau ditambah sendiri sesuai kebutuhan, tanpa terpaksa mengikuti satu alur kerja besar yang kaku. Semuanya berjalan lokal di perangkatmu, dari pemisahan stem, sintesis suara karakter, dan fine-tune model, sampai pembuatan gambar, video, hingga inference LLM. Tanpa langganan, tanpa data yang dikirim ke cloud.
+Waves adalah toolkit dengan beragam utilitas pintar untuk mempermudah kreasimu. Setiap utilitas berdiri sendiri. Dapat kamu pakai untuk suatu saat, digabung, atau ditambah sendiri sesuai kebutuhan, tanpa terpaksa mengikuti satu alur kerja besar yang kaku. Semuanya berjalan lokal di perangkatmu, dari pemisahan stem, sintesis suara karakter, dan fine-tune model, sampai pembuatan gambar, video, hingga inference LLM.
 
 Mulai dari pemisah lagu hari ini, pakai yang lain saat butuh. Hal ini akan terus bertambah mengikuti apa yang kamu butuhkan.
 
