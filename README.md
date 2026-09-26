@@ -14,13 +14,13 @@ Saat ini tersedia sembilan utilitas: **Stem Separator**, **Music Studio**, **Voi
 
 ## 📸 Screenshots
 
-Klik untuk membuka galeri lengkap dengan navigasi `←` / `→`.
+Klik untuk membuka screenshots dengan navigasi `←` / `→`.
 
-<a href="docs/screenshots/index.html">
+<a href="https://kiraryuuki.github.io/Waves/">
   <img src="docs/screenshots/Waves-Music-Studio.png" alt="Waves Music Studio" width="880">
 </a>
 
-👉 **[Buka galeri lengkap (11 screenshot)](docs/screenshots/index.html)**, tombol **Prev**/**Next**, tombol panah keyboard, thumbnail untuk lompat langsung, swipe di perangkat sentuh, dan klik gambar untuk layar penuh.
+👉 **[Buka screenshots (11 gambar)](https://kiraryuuki.github.io/Waves/)**, tombol **Prev**/**Next**, tombol panah keyboard, thumbnail untuk lompat langsung, swipe di perangkat sentuh, dan klik gambar untuk layar penuh.
 
 ## 🚀 Fitur Utama
 
@@ -151,7 +151,7 @@ request `/api/*` ke backend di port 9035, jadi **kedua server harus jalan bersam
 Waves/
 ├── server/                      # Backend Python (FastAPI) — jangan dinamai "app"
 │   ├── waves.py                 # App utama: upload job, CORS, security headers,
-│   │                            #   rate limit, Origin guard, exception handler
+│   │                            # rate limit, Origin guard, exception handler
 │   ├── uploads.py               # Helper batas ukuran upload (stream + hapus parsial)
 │   ├── jobs.py                  # Job store (snapshot JSON atomik + rekonsiliasi disk)
 │   ├── separator.py             # Menjalankan Demucs & parsing progress live
@@ -186,8 +186,10 @@ Waves/
 ├── tests/
 │   └── security_regression.py   # Smoke test keamanan (39 assertion)
 ├── docs/
+│   ├── index.html               # Galeri screenshots interaktif (GitHub Pages)
 │   ├── logo/                    # Logo proyek
-│   └── screenshots/             # Screenshot antarmuka + index.html (galeri)
+│   ├── releases/                # Catatan rilis
+│   └── screenshots/             # Screenshot antarmuka (11 PNG)
 ├── scripts/                     # start.mjs / stop.mjs / restart.mjs (runner daemon)
 ├── requirements.txt
 ├── package.json

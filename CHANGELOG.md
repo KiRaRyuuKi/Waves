@@ -20,7 +20,7 @@ versioning loosely follows [Semantic Versioning](https://semver.org/).
 - Binary lokal `bin/waves.js` agar `npx waves` berjalan tanpa install global (field `bin` di `package.json`, `npm run waves` tetap kompatibel)
 - Vendor fork untuk Screen Coder dan inferensi GGUF: `vendor/llama` (ggml-org/llama.cpp, MIT, fb34fc2) dan `vendor/coder` (screenshot-to-code agent), dengan atribusi upstream di tabel Vendor Forks
 - Checkpoint VITS Kafka sebagai objek Git LFS di `server/storage/models/kafka/kafka.pth` (159.650.901 byte, 804 speaker) + konfigurasi multi-speaker bersama
-- Galeri screenshot `docs/screenshots/index.html` (11 tangkapan) dengan Prev/Next, panah keyboard, thumbnail, swipe, dan layar penuh
+- Galeri screenshot `docs/index.html` (11 tangkapan) dengan Prev/Next, panah keyboard, thumbnail, swipe, dan layar penuh, dipublikasikan lewat GitHub Pages di `https://kiraryuuki.github.io/Waves/`
 - Regression test keamanan `tests/security_regression.py`: 39 pemeriksaan untuk A01 path traversal, A02 secret masking, A04 batas upload, CSRF origin guard, dan A05 sisa file temporer
 - Sponsorship: `.github/FUNDING.yml` (GitHub Sponsors `KiRaRyuuKi` + Saweria `saweria.co/KiRaRyuuKi`)
 - Governance open-source awal: `LICENSE` (MIT), `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue/PR templates
